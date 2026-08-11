@@ -1,0 +1,9 @@
+name: Bootstrap Eternalist Foundry
+description: Build the pinned Foundry engine and expose its CI substrate.
+
+runs:
+  using: composite
+  steps:
+    - name: Build pinned engine
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/../../../scripts/ci/bootstrap-foundry"
