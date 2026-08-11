@@ -43,7 +43,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Raise pinned Foundry
-        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@fb7438a5c62fecbc3841a7046b3126998ab76180
+        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@c017b0a43166dc42c19681d79221b9d0759895cb
       - name: Install declared Rust toolchain
         shell: bash
         env:
