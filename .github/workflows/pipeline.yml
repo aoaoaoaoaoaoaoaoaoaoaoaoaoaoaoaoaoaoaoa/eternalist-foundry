@@ -39,7 +39,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Raise pinned Foundry
-        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@c017b0a43166dc42c19681d79221b9d0759895cb
+        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@516e2b6797740db492743b0a162eb44d9202dc48
       - name: Validate contract and forge matrix
         id: plan
         shell: bash
@@ -71,12 +71,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Raise pinned Foundry
-        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@c017b0a43166dc42c19681d79221b9d0759895cb
+        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@516e2b6797740db492743b0a162eb44d9202dc48
       - name: Install declared Rust toolchain
         shell: bash
         env:
           FOUNDRY_TOOLCHAIN: ${{ inputs.toolchain }}
         run: foundry toolchain --file "$FOUNDRY_TOOLCHAIN"
+      - name: Restore trusted Rust cache
+        if: ${{ !contains(matrix.laws, 'security') }}
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-bin: false
+          save-if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
       - name: Raise Linux display substrate
         if: ${{ runner.os == 'Linux' && matrix.setup != 'ordinary' }}
         shell: bash
@@ -150,7 +156,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Raise pinned Foundry
-        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@c017b0a43166dc42c19681d79221b9d0759895cb
+        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@516e2b6797740db492743b0a162eb44d9202dc48
       - name: Install declared Rust toolchain
         shell: bash
         env:
