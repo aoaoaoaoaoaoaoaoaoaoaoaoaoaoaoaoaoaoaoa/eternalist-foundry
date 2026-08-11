@@ -175,12 +175,12 @@ await_runs() {
                 '[.jobs[] | select(.status == "completed" and (.conclusion as $value | $terminal | index($value))) | {name,conclusion}]' \
                 <<<"$payload")
 
-            if [[ $failed_jobs != '[]' ]]; then
+            if [[ $failed_jobs != '[]' && $complete == false ]]; then
                 emit "${repositories[index]}" "${runs[index]}" failed "${conclusion:-failure}" "$url" "$elapsed" "$payload"
                 settled[index]=true
                 pending=$((pending - 1))
                 failure_seen=true
-                [[ $complete == true ]] || exit 1
+                exit 1
             elif [[ $status == completed ]]; then
                 if [[ $conclusion == success ]]; then
                     emit "${repositories[index]}" "${runs[index]}" completed success "$url" "$elapsed" "$payload"

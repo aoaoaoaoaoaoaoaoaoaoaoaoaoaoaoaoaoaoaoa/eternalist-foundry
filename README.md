@@ -87,7 +87,7 @@ It is silent while work remains. At success, failure, or timeout it emits one
 JSON record containing wall time, aggregate runner time, the slowest jobs and
 steps, and any failed jobs. It returns nonzero on failure or timeout and returns
 early when a job has already failed unless `--complete` requests every named
-run's terminal result. Numeric IDs resolve against `--repo` or the current Git
+run's completed result. Numeric IDs resolve against `--repo` or the current Git
 repository. Vigil refuses to use plain `gh` unless it is authenticated as the
 Eternalist automation account, preserving the boundary with repository-scoped
 GitHub identities.
