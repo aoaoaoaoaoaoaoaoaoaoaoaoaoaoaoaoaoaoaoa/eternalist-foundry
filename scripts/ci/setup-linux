@@ -20,12 +20,13 @@ esac
 packages=(
     bubblewrap
     dbus-user-session
+    libwayland-dev
     libxkbcommon0
     mesa-vulkan-drivers
 )
 case $setup in
     x11) packages+=(i3-wm libxkbcommon-x11-0 xauth xvfb) ;;
-    wayland) packages+=(libwayland-dev weston) ;;
+    wayland) packages+=(weston) ;;
 esac
 
 sudo apt-get update
