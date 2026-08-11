@@ -1,0 +1,220 @@
+name: Eternalist Foundry
+
+on:
+  workflow_call:
+    inputs:
+      contract:
+        description: Repository-relative Foundry contract.
+        required: false
+        type: string
+        default: foundry.toml
+      toolchain:
+        description: Repository-relative rust-toolchain file.
+        required: false
+        type: string
+        default: rust-toolchain.toml
+      publish:
+        description: Publish judged assets when the caller is running a tag.
+        required: false
+        type: boolean
+        default: false
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  plan:
+    name: Forge proof graph
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.plan.outputs.proofs }}
+    steps:
+      - name: Check out product
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Raise pinned Foundry
+        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@8340d84bbf11904b89c697ca5c8b85ab7d4dcb14
+      - name: Validate contract and forge matrix
+        id: plan
+        shell: bash
+        env:
+          FOUNDRY_CONTRACT: ${{ inputs.contract }}
+        run: |
+          set -euo pipefail
+          foundry --contract "$FOUNDRY_CONTRACT" check
+          foundry --contract "$FOUNDRY_CONTRACT" plan \
+            --format human \
+            --github-output "$GITHUB_OUTPUT"
+
+  proof:
+    name: Proof · ${{ matrix.name }}
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.timeout_minutes }}
+    permissions:
+      contents: read
+    steps:
+      - name: Check out product
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Raise pinned Foundry
+        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@8340d84bbf11904b89c697ca5c8b85ab7d4dcb14
+      - name: Install declared Rust toolchain
+        shell: bash
+        env:
+          FOUNDRY_TOOLCHAIN: ${{ inputs.toolchain }}
+        run: foundry toolchain --file "$FOUNDRY_TOOLCHAIN"
+      - name: Raise Linux display substrate
+        if: ${{ runner.os == 'Linux' && matrix.setup != 'ordinary' }}
+        shell: bash
+        env:
+          FOUNDRY_SETUP: ${{ matrix.setup }}
+        run: bash "$FOUNDRY_ENGINE_ROOT/scripts/ci/setup-linux" "$FOUNDRY_SETUP"
+      - name: Install pinned dependency auditor
+        if: ${{ contains(matrix.laws, 'security') }}
+        uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
+        with:
+          tool: cargo-audit@0.22.2
+      - name: Install pinned native packager
+        if: ${{ contains(matrix.laws, 'artifact') && (matrix.delivery == 'dmg' || matrix.delivery == 'nsis-current-user') }}
+        uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
+        with:
+          tool: cargo-packager@0.11.8
+      - name: Install pinned CLI distributor
+        if: ${{ contains(matrix.laws, 'artifact') && (matrix.delivery == 'dist-shell' || matrix.delivery == 'dist-powershell') }}
+        uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
+        with:
+          tool: cargo-dist@0.32.0
+      - name: Execute and seal proof
+        shell: bash
+        env:
+          FOUNDRY_CONTRACT: ${{ inputs.contract }}
+          FOUNDRY_PROOF_NAME: ${{ matrix.proof }}
+          FOUNDRY_PROOF_COORDINATE: ${{ matrix.coordinate }}
+          FOUNDRY_EVIDENCE_ROOT: ${{ runner.temp }}/foundry-evidence
+        run: >-
+          bash "$FOUNDRY_ENGINE_ROOT/scripts/ci/run-proof"
+          "$FOUNDRY_CONTRACT"
+          "$FOUNDRY_PROOF_NAME"
+          "$FOUNDRY_PROOF_COORDINATE"
+          "$FOUNDRY_EVIDENCE_ROOT"
+      - name: Retain sealed evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: foundry-proof-${{ matrix.id }}
+          path: ${{ runner.temp }}/foundry-evidence
+          if-no-files-found: error
+          retention-days: 14
+
+  verdict:
+    name: Foundry verdict
+    if: ${{ always() }}
+    needs:
+      - plan
+      - proof
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out product
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Raise pinned Foundry
+        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@8340d84bbf11904b89c697ca5c8b85ab7d4dcb14
+      - name: Install declared Rust toolchain
+        shell: bash
+        env:
+          FOUNDRY_TOOLCHAIN: ${{ inputs.toolchain }}
+        run: foundry toolchain --file "$FOUNDRY_TOOLCHAIN"
+      - name: Recover proof cells
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: foundry-proof-*
+          path: ${{ runner.temp }}/foundry-evidence
+          merge-multiple: true
+      - name: Judge complete evidence graph
+        shell: bash
+        env:
+          FOUNDRY_CONTRACT: ${{ inputs.contract }}
+          FOUNDRY_EVIDENCE_ROOT: ${{ runner.temp }}/foundry-evidence
+          FOUNDRY_SUPPORT: ${{ runner.temp }}/foundry-verdict/support.json
+        run: |
+          set -euo pipefail
+          foundry --contract "$FOUNDRY_CONTRACT" judge "$FOUNDRY_EVIDENCE_ROOT"
+          foundry --contract "$FOUNDRY_CONTRACT" support \
+            "$FOUNDRY_EVIDENCE_ROOT" \
+            "$FOUNDRY_SUPPORT"
+      - name: Retain public support manifest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: foundry-support
+          path: ${{ runner.temp }}/foundry-verdict/support.json
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish judged release
+    if: ${{ inputs.publish && needs.verdict.result == 'success' && startsWith(github.ref, 'refs/tags/') }}
+    needs:
+      - plan
+      - proof
+      - verdict
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Check out product
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Raise pinned Foundry
+        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@8340d84bbf11904b89c697ca5c8b85ab7d4dcb14
+      - name: Install declared Rust toolchain
+        shell: bash
+        env:
+          FOUNDRY_TOOLCHAIN: ${{ inputs.toolchain }}
+        run: foundry toolchain --file "$FOUNDRY_TOOLCHAIN"
+      - name: Recover proof cells
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: foundry-proof-*
+          path: ${{ runner.temp }}/foundry-evidence
+          merge-multiple: true
+      - name: Stage judged assets
+        shell: bash
+        env:
+          FOUNDRY_CONTRACT: ${{ inputs.contract }}
+          FOUNDRY_EVIDENCE_ROOT: ${{ runner.temp }}/foundry-evidence
+          FOUNDRY_RELEASE_STAGE: ${{ runner.temp }}/foundry-release
+        run: >-
+          foundry --contract "$FOUNDRY_CONTRACT" stage
+          "$FOUNDRY_EVIDENCE_ROOT"
+          "$FOUNDRY_RELEASE_STAGE"
+      - name: Publish immutable release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FOUNDRY_RELEASE_STAGE: ${{ runner.temp }}/foundry-release
+        run: |
+          set -euo pipefail
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --verify-tag \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes
+          fi
+          gh release upload "$GITHUB_REF_NAME" "$FOUNDRY_RELEASE_STAGE"/* --clobber
