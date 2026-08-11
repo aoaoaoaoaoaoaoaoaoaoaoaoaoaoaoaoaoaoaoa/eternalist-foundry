@@ -6,7 +6,16 @@ cd "$root"
 
 ./check.py verify
 scripts/check-cells
-shellcheck scripts/audit scripts/check scripts/check-cells scripts/package scripts/verify-install scripts/ci/*
+shellcheck \
+    scripts/audit \
+    scripts/check \
+    scripts/check-cells \
+    scripts/package \
+    scripts/test-vigil \
+    scripts/verify-install \
+    scripts/vigil \
+    scripts/ci/*
+scripts/test-vigil
 actionlint \
     .github/workflows/ci.yml \
     .github/workflows/pipeline.yml \

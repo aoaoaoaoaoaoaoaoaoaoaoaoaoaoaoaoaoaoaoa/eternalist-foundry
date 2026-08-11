@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly expected_login=aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa
+readonly terminal_job_failures='["action_required","cancelled","failure","stale","startup_failure","timed_out"]'
+
+usage() {
+    cat <<'EOF'
+Usage: vigil await [--repo OWNER/REPO] [--interval SECONDS] [--timeout SECONDS]
+                   [--complete] RUN_ID_OR_URL...
+
+Block silently until every GitHub Actions run succeeds. By default, Vigil
+returns as soon as any job reaches a terminal failure. --complete waits for
+all named runs. Numeric run IDs use --repo or the current Git repository.
+EOF
+}
+
+die() {
+    printf 'vigil: %s\n' "$1" >&2
+    exit "${2:-64}"
+}
+
+require_unsigned_integer() {
+    local name=$1 value=$2
+    [[ $value =~ ^[0-9]+$ ]] || die "$name must be an unsigned integer, found '$value'"
+}
+
+current_repository() {
+    gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null ||
+        die 'a numeric run ID requires --repo or a GitHub repository worktree'
+}
+
+emit() {
+    local repository=$1 run=$2 state=$3 conclusion=$4 url=$5 elapsed=$6 payload=$7
+    jq -cn \
+        --arg repository "$repository" \
+        --argjson run "$run" \
+        --arg state "$state" \
+        --arg conclusion "$conclusion" \
+        --arg url "$url" \
+        --argjson wall_seconds "$elapsed" \
+        --argjson terminal "$terminal_job_failures" \
+        --argjson observed "$payload" '
+            def span:
+                ((.completedAt | fromdateiso8601) - (.startedAt | fromdateiso8601));
+            [
+                $observed.jobs[]
+                | select(.status == "completed")
+                | {name, conclusion, seconds: span}
+            ] as $jobs
+            | [
+                $observed.jobs[] as $job
+                | $job.steps[]?
+                | select(.status == "completed")
+                | {job: $job.name, name, conclusion, seconds: span}
+            ] as $steps
+            | {
+                repository: $repository,
+                run: $run,
+                state: $state,
+                conclusion: $conclusion,
+                url: $url,
+                wall_seconds: $wall_seconds,
+                runner_seconds: (($jobs | map(.seconds) | add) // 0),
+                slow_jobs: ($jobs | sort_by(.seconds) | reverse | .[:5]),
+                slow_steps: ($steps | sort_by(.seconds) | reverse | .[:8]),
+                failed_jobs: [
+                    $observed.jobs[]
+                    | select(
+                        .status == "completed"
+                        and (.conclusion as $value | $terminal | index($value))
+                    )
+                    | {name, conclusion}
+                ]
+            }
+        '
+}
+
+await_runs() {
+    local interval=30 timeout=7200 explicit_repository='' complete=false
+    while (($#)); do
+        case $1 in
+            --repo)
+                (($# >= 2)) || die '--repo requires OWNER/REPO'
+                explicit_repository=$2
+                shift 2
+                ;;
+            --interval)
+                (($# >= 2)) || die '--interval requires seconds'
+                interval=$2
+                shift 2
+                ;;
+            --timeout)
+                (($# >= 2)) || die '--timeout requires seconds'
+                timeout=$2
+                shift 2
+                ;;
+            --complete)
+                complete=true
+                shift
+                ;;
+            --help|-h)
+                usage
+                exit 0
+                ;;
+            --*) die "unknown await option '$1'" ;;
+            *) break ;;
+        esac
+    done
+    (($#)) || die 'await requires at least one run ID or URL'
+    require_unsigned_integer interval "$interval"
+    require_unsigned_integer timeout "$timeout"
+    ((interval > 0)) || die 'interval must be positive'
+    ((timeout > 0)) || die 'timeout must be positive'
+    if [[ -n $explicit_repository && ! $explicit_repository =~ ^[^/[:space:]]+/[^/[:space:]]+$ ]]; then
+        die "invalid repository '$explicit_repository'"
+    fi
+
+    local login
+    login=$(gh api user --jq .login 2>/dev/null) || die 'plain gh is not authenticated' 69
+    [[ $login == "$expected_login" ]] ||
+        die "plain gh is authenticated as '$login', expected '$expected_login'" 69
+
+    local -a repositories=() runs=() settled=() errors=()
+    local reference repository run fallback_repository=''
+    for reference in "$@"; do
+        repository=$explicit_repository
+        run=''
+        if [[ $reference =~ ^https://github\.com/([^/]+)/([^/]+)/actions/runs/([0-9]+)([/\?].*)?$ ]]; then
+            repository=${BASH_REMATCH[1]}/${BASH_REMATCH[2]}
+            run=${BASH_REMATCH[3]}
+        elif [[ $reference =~ ^([^/[:space:]]+/[^/#[:space:]]+)#([0-9]+)$ ]]; then
+            repository=${BASH_REMATCH[1]}
+            run=${BASH_REMATCH[2]}
+        elif [[ $reference =~ ^[0-9]+$ ]]; then
+            run=$reference
+            if [[ -z $repository ]]; then
+                [[ -n $fallback_repository ]] || fallback_repository=$(current_repository)
+                repository=$fallback_repository
+            fi
+        else
+            die "invalid run reference '$reference'"
+        fi
+        repositories+=("$repository")
+        runs+=("$run")
+        settled+=(false)
+        errors+=(0)
+    done
+
+    local begun now pending failure_seen=false index payload status conclusion url created updated elapsed failed_jobs
+    begun=$(date +%s)
+    while :; do
+        pending=0
+        for index in "${!runs[@]}"; do
+            [[ ${settled[index]} == false ]] || continue
+            pending=$((pending + 1))
+            if ! payload=$(gh run view "${runs[index]}" \
+                --repo "${repositories[index]}" \
+                --json status,conclusion,createdAt,updatedAt,url,jobs 2>/dev/null)
+            then
+                errors[index]=$((errors[index] + 1))
+                if ((errors[index] >= 5)); then
+                    die "GitHub rejected five consecutive observations of ${repositories[index]}#${runs[index]}" 69
+                fi
+                continue
+            fi
+            errors[index]=0
+            status=$(jq -er '.status' <<<"$payload")
+            conclusion=$(jq -r '.conclusion // ""' <<<"$payload")
+            url=$(jq -er '.url' <<<"$payload")
+            created=$(jq -er '.createdAt | fromdateiso8601' <<<"$payload")
+            updated=$(jq -er '.updatedAt | fromdateiso8601' <<<"$payload")
+            elapsed=$((updated - created))
+            failed_jobs=$(jq -c --argjson terminal "$terminal_job_failures" \
+                '[.jobs[] | select(.status == "completed" and (.conclusion as $value | $terminal | index($value))) | {name,conclusion}]' \
+                <<<"$payload")
+
+            if [[ $failed_jobs != '[]' ]]; then
+                emit "${repositories[index]}" "${runs[index]}" failed "${conclusion:-failure}" "$url" "$elapsed" "$payload"
+                settled[index]=true
+                pending=$((pending - 1))
+                failure_seen=true
+                [[ $complete == true ]] || exit 1
+            elif [[ $status == completed ]]; then
+                if [[ $conclusion == success ]]; then
+                    emit "${repositories[index]}" "${runs[index]}" completed success "$url" "$elapsed" "$payload"
+                else
+                    emit "${repositories[index]}" "${runs[index]}" failed "$conclusion" "$url" "$elapsed" "$payload"
+                    failure_seen=true
+                fi
+                settled[index]=true
+                pending=$((pending - 1))
+            fi
+        done
+        ((pending > 0)) || break
+        now=$(date +%s)
+        if ((now - begun >= timeout)); then
+            for index in "${!runs[@]}"; do
+                [[ ${settled[index]} == false ]] || continue
+                emit "${repositories[index]}" "${runs[index]}" timed_out '' \
+                    "https://github.com/${repositories[index]}/actions/runs/${runs[index]}" \
+                    "$((now - begun))" '{"jobs":[]}'
+            done
+            exit 124
+        fi
+        sleep "$interval"
+    done
+    [[ $failure_seen == false ]]
+}
+
+command=${1-}
+case $command in
+    await)
+        shift
+        await_runs "$@"
+        ;;
+    --help|-h|'')
+        usage
+        ;;
+    *) die "unknown command '$command'" ;;
+esac

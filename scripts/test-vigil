@@ -1,0 +1,70 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+cell=$(mktemp -d "${TMPDIR:-/tmp}/eternalist-vigil-test.XXXXXX")
+trap 'rm -rf "$cell"' EXIT HUP INT TERM
+
+cat >"$cell/gh" <<'EOF'
+#!/bin/sh
+set -eu
+
+case "$1 $2" in
+    'api user')
+        printf '%s\n' aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa
+        ;;
+    'repo view')
+        printf '%s\n' aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/example
+        ;;
+    'run view')
+        run=$3
+        state=${VIGIL_FAKE_STATE:?}
+        count=0
+        test ! -f "$state" || count=$(cat "$state")
+        count=$((count + 1))
+        printf '%s\n' "$count" >"$state"
+        case $run:$count in
+            7:1)
+                printf '%s\n' '{"status":"in_progress","conclusion":"","createdAt":"2026-08-11T00:00:00Z","updatedAt":"2026-08-11T00:00:02Z","url":"https://github.com/aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/example/actions/runs/7","jobs":[{"name":"proof","status":"in_progress","conclusion":"","startedAt":"2026-08-11T00:00:01Z","completedAt":"0001-01-01T00:00:00Z","steps":[]}]}'
+                ;;
+            7:*)
+                printf '%s\n' '{"status":"completed","conclusion":"success","createdAt":"2026-08-11T00:00:00Z","updatedAt":"2026-08-11T00:00:09Z","url":"https://github.com/aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/example/actions/runs/7","jobs":[{"name":"proof","status":"completed","conclusion":"success","startedAt":"2026-08-11T00:00:01Z","completedAt":"2026-08-11T00:00:09Z","steps":[{"name":"execute","status":"completed","conclusion":"success","startedAt":"2026-08-11T00:00:02Z","completedAt":"2026-08-11T00:00:09Z"}]}]}'
+                ;;
+            8:*)
+                printf '%s\n' '{"status":"in_progress","conclusion":"","createdAt":"2026-08-11T00:00:00Z","updatedAt":"2026-08-11T00:00:04Z","url":"https://github.com/aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/example/actions/runs/8","jobs":[{"name":"runtime","status":"completed","conclusion":"failure","startedAt":"2026-08-11T00:00:01Z","completedAt":"2026-08-11T00:00:04Z","steps":[{"name":"execute","status":"completed","conclusion":"failure","startedAt":"2026-08-11T00:00:02Z","completedAt":"2026-08-11T00:00:04Z"}]},{"name":"artifact","status":"in_progress","conclusion":"","startedAt":"2026-08-11T00:00:01Z","completedAt":"0001-01-01T00:00:00Z","steps":[]}]}'
+                ;;
+            *) exit 64 ;;
+        esac
+        ;;
+    *) exit 64 ;;
+esac
+EOF
+chmod +x "$cell/gh"
+
+export PATH="$cell:$PATH"
+export VIGIL_FAKE_STATE="$cell/state"
+
+success=$("$root/scripts/vigil" await --interval 1 --timeout 5 7)
+printf '%s\n' "$success" | jq -e '
+    .repository == "aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/example" and
+    .run == 7 and .state == "completed" and .conclusion == "success" and
+    .wall_seconds == 9 and .runner_seconds == 8 and
+    .slow_jobs == [{"name":"proof","conclusion":"success","seconds":8}] and
+    .slow_steps == [{"job":"proof","name":"execute","conclusion":"success","seconds":7}] and
+    .failed_jobs == []
+' >/dev/null
+
+rm -f "$VIGIL_FAKE_STATE"
+if failure=$("$root/scripts/vigil" await --interval 1 --timeout 5 \
+    'https://github.com/aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/example/actions/runs/8')
+then
+    printf '%s\n' 'vigil admitted a failed job' >&2
+    exit 1
+fi
+printf '%s\n' "$failure" | jq -e '
+    .run == 8 and .state == "failed" and
+    .runner_seconds == 3 and
+    .failed_jobs == [{"name":"runtime","conclusion":"failure"}]
+' >/dev/null
+
+printf '%s\n' 'Vigil blocks quietly and returns terminal truth'

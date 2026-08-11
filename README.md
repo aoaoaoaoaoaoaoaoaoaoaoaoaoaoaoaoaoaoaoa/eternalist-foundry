@@ -65,6 +65,33 @@ workflow once per contract and assign each call a distinct lowercase
 `namespace`. Proof cells and support manifests remain disjoint within the one
 Actions run.
 
+## Acceleration And Observation
+
+The pipeline restores Rust dependency and target caches for every proof except
+the independent security cell. Only trusted pushes to `main` may save product
+caches; pull requests and tags are restore-only. The bootstrap action separately
+caches the release-built Foundry engine by exact action pin, host operating
+system, and architecture. A missing or evicted cache merely makes a proof cold:
+caches never satisfy a law, enter a receipt, or alter a verdict.
+
+Vigil turns hosted execution into one blocking observation instead of a stream
+of status queries:
+
+```console
+vigil await 31526947382
+vigil await OWNER/REPOSITORY#31526947382
+vigil await https://github.com/OWNER/REPOSITORY/actions/runs/31526947382
+```
+
+It is silent while work remains. At success, failure, or timeout it emits one
+JSON record containing wall time, aggregate runner time, the slowest jobs and
+steps, and any failed jobs. It returns nonzero on failure or timeout and returns
+early when a job has already failed unless `--complete` requests every named
+run's terminal result. Numeric IDs resolve against `--repo` or the current Git
+repository. Vigil refuses to use plain `gh` unless it is authenticated as the
+Eternalist automation account, preserving the boundary with repository-scoped
+GitHub identities.
+
 Before pushing a migration, validate the local boundary:
 
 ```console

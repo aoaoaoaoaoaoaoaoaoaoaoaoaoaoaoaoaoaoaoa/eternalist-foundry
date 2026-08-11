@@ -4,6 +4,18 @@ description: Build the pinned Foundry engine and expose its CI substrate.
 runs:
   using: composite
   steps:
+    - name: Restore pinned engine cache
+      id: engine-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/eternalist-foundry-target
+        key: eternalist-foundry-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.action_ref }}
     - name: Build pinned engine
       shell: bash
       run: bash "$GITHUB_ACTION_PATH/../../../scripts/ci/bootstrap-foundry"
+    - name: Save pinned engine cache
+      if: ${{ steps.engine-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/eternalist-foundry-target
+        key: eternalist-foundry-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.action_ref }}
