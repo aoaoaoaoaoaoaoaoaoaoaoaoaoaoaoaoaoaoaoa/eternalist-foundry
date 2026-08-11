@@ -16,7 +16,7 @@ jobs:
     name: Foundry
     permissions:
       contents: read
-    uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/workflows/pipeline.yml@f603a91ce6183b8b6aca5cfaa73a46c388d271e4
+    uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/workflows/pipeline.yml@1107101839dc640f19252f7c734f4c8b713310e2
 
   release:
     name: Release
@@ -24,4 +24,4 @@ jobs:
     needs: foundry
     permissions:
       contents: write
-    uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/workflows/publish.yml@f603a91ce6183b8b6aca5cfaa73a46c388d271e4
+    uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/workflows/publish.yml@1107101839dc640f19252f7c734f4c8b713310e2
