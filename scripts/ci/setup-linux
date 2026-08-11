@@ -25,7 +25,7 @@ packages=(
     mesa-vulkan-drivers
 )
 case $setup in
-    x11) packages+=(i3-wm libxkbcommon-x11-0 xauth xvfb) ;;
+    x11) packages+=(i3-wm libxkbcommon-x11-0 x11-utils xauth xvfb) ;;
     wayland) packages+=(weston) ;;
 esac
 
