@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  foundry:
+    name: Foundry
+    permissions:
+      contents: write
+    uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/workflows/pipeline.yml@5e36ae096ce9f3aaed485d5badad3845766f94b0
+    with:
+      publish: ${{ startsWith(github.ref, 'refs/tags/v') }}

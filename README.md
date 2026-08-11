@@ -26,6 +26,33 @@ foundry stage evidence/ release/
 `foundry.toml` is the repository boundary. GitHub Actions is only one scheduler
 over the same commands.
 
+## Adoption
+
+Each product keeps three small pieces of policy: `foundry.toml`, an exact
+`rust-toolchain.toml`, and the product-owned commands named by its proofs. Its
+workflow is the pinned caller in [`templates/ci.yml`](templates/ci.yml). The
+caller grants publication as its maximum permission; the reusable workflow
+contracts every nonpublication job back to read-only access.
+
+The workflow pin advances only to a Foundry commit whose own native matrix and
+verdict are green. Consumer repositories therefore inherit one immutable
+scheduler, action set, tool versions, Linux display substrate, receipt schema,
+and publication gate without copying their implementation. `actionlint` runs
+inside every source cell, so drift in a consumer workflow fails before product
+proof begins.
+
+Before pushing a migration, validate the local boundary:
+
+```console
+foundry --contract foundry.toml check
+foundry --contract foundry.toml plan
+```
+
+The complete native GUI contract is illustrated by
+[`tests/fixtures/native-gui.toml`](tests/fixtures/native-gui.toml). A product
+may combine several laws in one coordinate command when that avoids redundant
+compilation; the receipt still records the exact law set and host.
+
 ## Contract
 
 Every baseline coordinate is exactly one of `release-tested`, `supported`, or
