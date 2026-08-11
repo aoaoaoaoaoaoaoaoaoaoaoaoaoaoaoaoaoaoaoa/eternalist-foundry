@@ -88,9 +88,14 @@ jobs:
           tool: cargo-audit@0.22.2
       - name: Install pinned workflow linter
         if: ${{ contains(matrix.laws, 'source') }}
-        uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
-        with:
-          tool: actionlint@1.7.12
+        shell: bash
+        run: |
+          set -euo pipefail
+          bindir="$RUNNER_TEMP/foundry-tools"
+          mkdir -p "$bindir"
+          GOBIN="$bindir" go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          "$bindir/actionlint" --version
+          printf '%s\n' "$bindir" >> "$GITHUB_PATH"
       - name: Install pinned native packager
         if: ${{ contains(matrix.laws, 'artifact') && (matrix.delivery == 'dmg' || matrix.delivery == 'nsis-current-user') }}
         uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
