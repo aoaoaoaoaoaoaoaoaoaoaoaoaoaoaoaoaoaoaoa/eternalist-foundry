@@ -18,4 +18,10 @@ if grep -En '^[[:space:]]*(eternalist-apps|dwemer-poolrooms|egui|eframe|winit|eg
     fail 'application or GUI dependencies crossed into the policy engine'
 fi
 
+if ! cargo metadata --locked --no-deps --format-version 1 |
+    jq -e '.packages[] | select(.name == "eternalist-foundry") | .publish == []' >/dev/null
+then
+    fail 'the private policy engine became publishable'
+fi
+
 printf '%s\n' 'Foundry compile-time cell walls are closed'

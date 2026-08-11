@@ -1,5 +1,6 @@
 [package]
 name = "eternalist-foundry"
+publish = false
 description.workspace = true
 version.workspace = true
 edition.workspace = true
