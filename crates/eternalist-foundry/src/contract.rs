@@ -571,6 +571,8 @@ pub struct Proof {
     pub run: Vec<String>,
     #[serde(default)]
     pub coordinates: Vec<Coordinate>,
+    #[serde(default)]
+    pub setup: Option<Setup>,
     #[serde(default = "default_timeout")]
     pub timeout_minutes: u16,
 }
@@ -624,10 +626,52 @@ impl Proof {
                 )
             })?;
         }
+        if let Some(setup @ (Setup::X11 | Setup::Wayland)) = self.setup {
+            for coordinate in &self.coordinates {
+                require(coordinate.platform() == Platform::Linux, || {
+                    format!(
+                        "proof `{}` requests `{setup}` setup on non-Linux coordinate `{coordinate}`",
+                        self.name
+                    )
+                })?;
+                if let Some(display) = coordinate.display() {
+                    let coordinate_setup = match display {
+                        DisplayBackend::X11 => Setup::X11,
+                        DisplayBackend::Wayland => Setup::Wayland,
+                    };
+                    require(setup == coordinate_setup, || {
+                        format!(
+                            "proof `{}` requests `{setup}` setup for `{coordinate}`",
+                            self.name
+                        )
+                    })?;
+                }
+            }
+        }
+        if self.laws.iter().any(|law| law.needs_display()) {
+            for coordinate in &self.coordinates {
+                let expected = match coordinate.display() {
+                    Some(DisplayBackend::X11) => Some(Setup::X11),
+                    Some(DisplayBackend::Wayland) => Some(Setup::Wayland),
+                    None => None,
+                };
+                if let (Some(declared), Some(expected)) = (self.setup, expected) {
+                    require(declared == expected, || {
+                        format!(
+                            "proof `{}` cannot weaken `{coordinate}` to `{declared}` setup",
+                            self.name
+                        )
+                    })?;
+                }
+            }
+        }
         Ok(())
     }
 
-    pub fn setup(&self, coordinate: Option<Coordinate>) -> Setup {
+    pub fn setup_for(&self, coordinate: Option<Coordinate>) -> Setup {
+        if let Some(setup) = self.setup {
+            return setup;
+        }
         let needs_display = self.laws.iter().any(|law| law.needs_display());
         if !needs_display {
             return Setup::Ordinary;
@@ -805,6 +849,24 @@ mod tests {
                 .coordinates
                 .release_tested
                 .contains(&Coordinate::MacosX86_64Metal)
+        );
+    }
+
+    #[test]
+    fn library_host_proof_can_raise_a_wayland_substrate() {
+        let proof = toml::from_str::<Proof>(
+            r#"
+name = "wayland-host"
+laws = ["host"]
+run = ["scripts/test-wayland"]
+coordinates = ["linux-x86_64"]
+setup = "wayland"
+"#,
+        )
+        .expect("parse proof with explicit setup");
+        assert_eq!(
+            proof.setup_for(Some(Coordinate::LinuxX86_64)),
+            Setup::Wayland
         );
     }
 }

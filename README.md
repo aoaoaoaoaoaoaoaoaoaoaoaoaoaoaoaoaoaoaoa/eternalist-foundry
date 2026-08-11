@@ -52,6 +52,9 @@ The complete native GUI contract is illustrated by
 [`tests/fixtures/native-gui.toml`](tests/fixtures/native-gui.toml). A product
 may combine several laws in one coordinate command when that avoids redundant
 compilation; the receipt still records the exact law set and host.
+Library and CLI integration proofs may declare `setup = "x11"` or
+`setup = "wayland"` when their generic Linux coordinate needs a private display
+substrate. Native GUI coordinates derive the same setup from their coordinate.
 
 ## Contract
 

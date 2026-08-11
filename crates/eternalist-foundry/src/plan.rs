@@ -97,7 +97,7 @@ impl Node {
                 .to_owned(),
             os: coordinate.map_or("linux", Coordinate::os).to_owned(),
             arch: coordinate.map_or("x86_64", Coordinate::arch).to_owned(),
-            setup: proof.setup(coordinate),
+            setup: proof.setup_for(coordinate),
             target,
             delivery: coordinate.and_then(|value| contract.delivery.for_platform(value.platform())),
             timeout_minutes: proof.timeout_minutes,
