@@ -41,6 +41,11 @@ and publication gate without copying their implementation. `actionlint` runs
 inside every source cell, so drift in a consumer workflow fails before product
 proof begins.
 
+A repository containing several independently claimed products may call the
+workflow once per contract and assign each call a distinct lowercase
+`namespace`. Proof cells and support manifests remain disjoint within the one
+Actions run.
+
 Before pushing a migration, validate the local boundary:
 
 ```console
