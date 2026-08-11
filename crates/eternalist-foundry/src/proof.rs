@@ -157,6 +157,16 @@ impl Receipt {
     }
 
     pub fn validate_artifacts(&self, root: &Path) -> Result<()> {
+        if !root.exists() {
+            return if self.artifacts.is_empty() {
+                Ok(())
+            } else {
+                Err(Error::Contract(format!(
+                    "artifact directory for `{}` is absent despite its nonempty receipt",
+                    self.node
+                )))
+            };
+        }
         let actual = digest_tree(root)?;
         if actual == self.artifacts {
             Ok(())
@@ -364,5 +374,36 @@ mod tests {
                 .next()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn empty_inventory_survives_archive_directory_elision() {
+        let root = tempfile::tempdir().expect("temporary evidence root");
+        let missing = root.path().join("artifacts");
+        let mut receipt = Receipt {
+            schema: RECEIPT_SCHEMA,
+            node: "source--global".to_owned(),
+            proof: "source".to_owned(),
+            coordinate: None,
+            host: HostWitness::current(),
+            laws: vec![Law::Source],
+            source: "source".to_owned(),
+            command: vec!["true".to_owned()],
+            begun_unix_seconds: 0,
+            elapsed_milliseconds: 0,
+            success: true,
+            exit_code: Some(0),
+            run_url: None,
+            artifacts: Vec::new(),
+        };
+        receipt
+            .validate_artifacts(&missing)
+            .expect("archivers may omit empty directories");
+        receipt.artifacts.push(Artifact {
+            path: "missing".to_owned(),
+            bytes: 1,
+            sha256: "00".repeat(32),
+        });
+        assert!(receipt.validate_artifacts(&missing).is_err());
     }
 }
