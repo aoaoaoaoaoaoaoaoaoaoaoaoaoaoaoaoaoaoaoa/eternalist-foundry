@@ -25,7 +25,7 @@ packages=(
 )
 case $setup in
     x11) packages+=(i3-wm libxkbcommon-x11-0 xauth xvfb) ;;
-    wayland) packages+=(weston) ;;
+    wayland) packages+=(libwayland-dev weston) ;;
 esac
 
 sudo apt-get update
