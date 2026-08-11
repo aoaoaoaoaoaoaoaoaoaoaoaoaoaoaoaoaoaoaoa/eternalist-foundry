@@ -44,7 +44,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Raise pinned Foundry
-        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@1a45bb244d4c70aff63ae75788e69edfd7439f7f
+        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@8cf8cba64590a7ff3bcac808af3842d6f2ca7724
       - name: Validate contract and forge matrix
         id: plan
         shell: bash
@@ -76,7 +76,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Raise pinned Foundry
-        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@1a45bb244d4c70aff63ae75788e69edfd7439f7f
+        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@8cf8cba64590a7ff3bcac808af3842d6f2ca7724
       - name: Install declared Rust toolchain
         shell: bash
         env:
@@ -155,7 +155,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Raise pinned Foundry
-        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@1a45bb244d4c70aff63ae75788e69edfd7439f7f
+        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@8cf8cba64590a7ff3bcac808af3842d6f2ca7724
       - name: Install declared Rust toolchain
         shell: bash
         env:
@@ -204,7 +204,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Raise pinned Foundry
-        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@1a45bb244d4c70aff63ae75788e69edfd7439f7f
+        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@8cf8cba64590a7ff3bcac808af3842d6f2ca7724
       - name: Install declared Rust toolchain
         shell: bash
         env:
