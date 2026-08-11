@@ -49,9 +49,9 @@ contract.
 
 Each product keeps three small pieces of policy: `foundry.toml`, an exact
 `rust-toolchain.toml`, and the product-owned commands named by its proofs. Its
-workflow is the pinned caller in [`templates/ci.yml`](templates/ci.yml). The
-caller grants publication as its maximum permission; the reusable workflow
-contracts every nonpublication job back to read-only access.
+workflow is the pinned caller in [`templates/ci.yml`](templates/ci.yml).
+Ordinary proof calls are read-only. A separate tag-gated publication call
+receives write authority only after the complete proof call succeeds.
 
 The workflow pin advances only to a Foundry commit whose own native matrix and
 verdict are green. Consumer repositories therefore inherit one immutable

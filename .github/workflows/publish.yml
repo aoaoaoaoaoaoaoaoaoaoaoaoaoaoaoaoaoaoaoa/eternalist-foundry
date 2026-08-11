@@ -1,0 +1,80 @@
+name: Eternalist Foundry Publication
+
+on:
+  workflow_call:
+    inputs:
+      contract:
+        description: Repository-relative Foundry contract.
+        required: false
+        type: string
+        default: foundry.toml
+      toolchain:
+        description: Repository-relative rust-toolchain file.
+        required: false
+        type: string
+        default: rust-toolchain.toml
+      namespace:
+        description: Collision-free evidence namespace for repositories with several products.
+        required: false
+        type: string
+        default: product
+
+permissions: {}
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  publish:
+    name: Publish judged release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Refuse non-tag authority
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        shell: bash
+        run: exit 1
+      - name: Check out product
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Raise pinned Foundry
+        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@8cf8cba64590a7ff3bcac808af3842d6f2ca7724
+      - name: Install declared Rust toolchain
+        shell: bash
+        env:
+          FOUNDRY_TOOLCHAIN: ${{ inputs.toolchain }}
+        run: foundry toolchain --file "$FOUNDRY_TOOLCHAIN"
+      - name: Recover proof cells
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: foundry-${{ inputs.namespace }}-proof-*
+          path: ${{ runner.temp }}/foundry-evidence
+          merge-multiple: true
+      - name: Stage judged assets
+        shell: bash
+        env:
+          FOUNDRY_CONTRACT: ${{ inputs.contract }}
+          FOUNDRY_EVIDENCE_ROOT: ${{ runner.temp }}/foundry-evidence
+          FOUNDRY_RELEASE_STAGE: ${{ runner.temp }}/foundry-release
+        run: >-
+          foundry --contract "$FOUNDRY_CONTRACT" stage
+          "$FOUNDRY_EVIDENCE_ROOT"
+          "$FOUNDRY_RELEASE_STAGE"
+      - name: Publish immutable release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FOUNDRY_RELEASE_STAGE: ${{ runner.temp }}/foundry-release
+        run: |
+          set -euo pipefail
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --verify-tag \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes
+          fi
+          gh release upload "$GITHUB_REF_NAME" "$FOUNDRY_RELEASE_STAGE"/* --clobber

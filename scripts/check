@@ -7,5 +7,9 @@ cd "$root"
 ./check.py verify
 scripts/check-cells
 shellcheck scripts/audit scripts/check scripts/check-cells scripts/package scripts/verify-install scripts/ci/*
-actionlint .github/workflows/ci.yml .github/workflows/pipeline.yml templates/ci.yml
+actionlint \
+    .github/workflows/ci.yml \
+    .github/workflows/pipeline.yml \
+    .github/workflows/publish.yml \
+    templates/ci.yml
 cargo run --quiet --locked --bin foundry -- check
