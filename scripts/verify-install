@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cell=$(mktemp -d "${TMPDIR:-/tmp}/eternalist-foundry-install.XXXXXX")
+trap 'rm -rf -- "$cell"' EXIT HUP INT TERM
+
+cargo install --locked --force --path "$root/crates/eternalist-foundry" --root "$cell"
+binary=$cell/bin/foundry
+"$binary" --version
+"$binary" --contract "$root/foundry.toml" check
+cargo uninstall --root "$cell" eternalist-foundry
+test ! -e "$binary"
