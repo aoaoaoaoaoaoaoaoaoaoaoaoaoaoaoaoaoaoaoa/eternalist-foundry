@@ -5,6 +5,7 @@ root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root"
 
 ./check.py verify
-shellcheck scripts/audit scripts/check scripts/package scripts/verify-install scripts/ci/*
+scripts/check-cells
+shellcheck scripts/audit scripts/check scripts/check-cells scripts/package scripts/verify-install scripts/ci/*
 actionlint .github/workflows/ci.yml .github/workflows/pipeline.yml templates/ci.yml
 cargo run --quiet --locked --bin foundry -- check

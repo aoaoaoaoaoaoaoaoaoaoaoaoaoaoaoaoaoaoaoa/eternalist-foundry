@@ -26,6 +26,25 @@ foundry stage evidence/ release/
 `foundry.toml` is the repository boundary. GitHub Actions is only one scheduler
 over the same commands.
 
+## Cell Walls
+
+Foundry is a binary-only policy engine, never an application substrate. It may
+know evidence laws, native coordinates, delivery forms, and trust states. It
+must not know application lifecycle types, GUI frameworks, product domains, or
+the implementation behind a proof command.
+
+The integration protocol is deliberately impoverished: a product contract
+supplies an argument vector; Foundry observes its exit status and artifact
+bytes. Eternalist Apps, egui-tester, and products neither link Foundry nor emit
+its receipt types. Foundry does not link them. Application and test-support
+versions therefore evolve independently from the evidence schema and release
+engine.
+
+`scripts/check-cells` enforces the compile-time boundary. Reusable product
+behavior belongs in Eternalist Apps; native GUI observation belongs in
+egui-tester; domain assertions remain in the product command named by the
+contract.
+
 ## Adoption
 
 Each product keeps three small pieces of policy: `foundry.toml`, an exact

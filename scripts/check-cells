@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$root"
+
+fail() {
+    printf 'Foundry cell-wall violation: %s\n' "$1" >&2
+    exit 1
+}
+
+if find crates -path '*/src/lib.rs' -print -quit | grep -q .; then
+    fail 'the policy engine must remain binary-only'
+fi
+
+if grep -En '^[[:space:]]*(eternalist-apps|dwemer-poolrooms|egui|eframe|winit|egui-tester)[[:space:]]*=' \
+    Cargo.toml crates/*/Cargo.toml; then
+    fail 'application or GUI dependencies crossed into the policy engine'
+fi
+
+printf '%s\n' 'Foundry compile-time cell walls are closed'
