@@ -17,7 +17,7 @@ use crate::{
     proof::{Artifact, RECEIPT_SCHEMA, Receipt, source_identity, write_json_atomic},
 };
 
-pub const SUPPORT_SCHEMA: u32 = 1;
+pub const SUPPORT_SCHEMA: u32 = 2;
 
 pub struct Adjudication {
     pub contract: Contract,
@@ -46,6 +46,8 @@ impl Adjudication {
             if receipt.node != node.id
                 || receipt.proof != node.proof
                 || receipt.coordinate != node.coordinate
+                || receipt.host.os != node.os
+                || receipt.host.arch != node.arch
                 || receipt.laws != node.laws
                 || receipt.command != proof_command(&contract, &node.proof)?
             {
@@ -92,6 +94,17 @@ impl Adjudication {
             .iter()
             .map(|coordinate| self.coordinate(*coordinate))
             .collect();
+        let deliveries = self
+            .contract
+            .release_platforms()
+            .into_iter()
+            .filter_map(|platform| {
+                self.contract
+                    .delivery
+                    .for_platform(platform)
+                    .map(|delivery| self.delivery(platform, delivery))
+            })
+            .collect();
         let global_proofs = self
             .receipts
             .iter()
@@ -130,6 +143,7 @@ impl Adjudication {
             },
             release_tested,
             supported,
+            deliveries,
             exclusions: self.contract.exclusions.clone(),
             global_proofs,
             artifacts,
@@ -142,17 +156,109 @@ impl Adjudication {
         Ok(manifest)
     }
 
+    pub fn stage(
+        &self,
+        workspace: &Path,
+        evidence_root: &Path,
+        output: &Path,
+    ) -> Result<SupportManifest> {
+        if output.exists() {
+            return Err(Error::Contract(format!(
+                "release stage `{}` already exists",
+                output.display()
+            )));
+        }
+        let parent = output
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        fs::create_dir_all(parent)
+            .map_err(|source| io("create release-stage parent", parent, source))?;
+        let temporary = output.with_extension(format!("stage.{}.tmp", std::process::id()));
+        fs::create_dir(&temporary)
+            .map_err(|source| io("create release stage", &temporary, source))?;
+        let result = self.populate_stage(workspace, evidence_root, &temporary);
+        let manifest = match result {
+            Ok(manifest) => manifest,
+            Err(error) => {
+                let _cleanup = fs::remove_dir_all(&temporary);
+                return Err(error);
+            }
+        };
+        fs::rename(&temporary, output)
+            .map_err(|source| io("commit release stage", output, source))?;
+        Ok(manifest)
+    }
+
+    fn populate_stage(
+        &self,
+        workspace: &Path,
+        evidence_root: &Path,
+        stage: &Path,
+    ) -> Result<SupportManifest> {
+        let manifest = self.write_support(workspace, &stage.join("support.json"))?;
+        let mut names = BTreeSet::from(["support.json".to_owned()]);
+        for receipt in &self.receipts {
+            for artifact in &receipt.artifacts {
+                let name = Path::new(&artifact.path)
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .ok_or_else(|| {
+                        Error::Contract(format!(
+                            "artifact `{}` has no UTF-8 file name",
+                            artifact.path
+                        ))
+                    })?;
+                if !names.insert(name.to_owned()) {
+                    return Err(Error::Contract(format!(
+                        "release artifact file name `{name}` is ambiguous"
+                    )));
+                }
+                let source = evidence_root
+                    .join(&receipt.node)
+                    .join("artifacts")
+                    .join(&artifact.path);
+                let destination = stage.join(name);
+                let _bytes = fs::copy(&source, &destination)
+                    .map_err(|source| io("stage release artifact", &destination, source))?;
+            }
+        }
+        Ok(manifest)
+    }
+
     fn coordinate(&self, coordinate: Coordinate) -> CoordinateSupport {
         let platform = coordinate.platform();
         CoordinateSupport {
             coordinate,
             platform,
-            delivery: self.contract.delivery.for_platform(platform),
-            trust: self.contract.trust.for_platform(platform),
             proofs: self
                 .receipts
                 .iter()
                 .filter(|receipt| receipt.coordinate == Some(coordinate))
+                .map(ProofEvidence::from)
+                .collect(),
+        }
+    }
+
+    fn delivery(&self, platform: Platform, delivery: Delivery) -> DeliverySupport {
+        let law = if delivery.produces_artifact() {
+            Law::Artifact
+        } else {
+            Law::Lifecycle
+        };
+        DeliverySupport {
+            platform,
+            delivery,
+            trust: self.contract.trust.for_platform(platform),
+            proofs: self
+                .receipts
+                .iter()
+                .filter(|receipt| {
+                    receipt
+                        .coordinate
+                        .is_some_and(|coordinate| coordinate.platform() == platform)
+                        && receipt.laws.contains(&law)
+                })
                 .map(ProofEvidence::from)
                 .collect(),
         }
@@ -206,6 +312,7 @@ pub struct SupportManifest {
     pub source: SupportSource,
     pub release_tested: Vec<CoordinateSupport>,
     pub supported: Vec<CoordinateSupport>,
+    pub deliveries: Vec<DeliverySupport>,
     pub exclusions: Vec<Exclusion>,
     pub global_proofs: Vec<ProofEvidence>,
     pub artifacts: Vec<ArtifactEvidence>,
@@ -231,7 +338,13 @@ pub struct SupportSource {
 pub struct CoordinateSupport {
     pub coordinate: Coordinate,
     pub platform: Platform,
-    pub delivery: Option<Delivery>,
+    pub proofs: Vec<ProofEvidence>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct DeliverySupport {
+    pub platform: Platform,
+    pub delivery: Delivery,
     pub trust: Option<Trust>,
     pub proofs: Vec<ProofEvidence>,
 }
@@ -319,4 +432,45 @@ fn github_tag() -> Option<String> {
 
 pub fn support_path(root: &Path) -> PathBuf {
     root.join("support.json")
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+    use crate::proof::{self, write_json_atomic};
+
+    #[test]
+    fn judgment_requires_the_exact_planned_command() {
+        let contract =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/linux-library.toml");
+        let evidence = tempfile::tempdir().expect("temporary evidence root");
+        for proof in ["source", "security", "source-package"] {
+            proof::execute(&contract, proof, None, evidence.path()).expect("execute global proof");
+        }
+        proof::execute(
+            &contract,
+            "host",
+            Some(Coordinate::LinuxX86_64),
+            evidence.path(),
+        )
+        .expect("execute host proof");
+        let judgment = Adjudication::judge(&contract, evidence.path()).expect("judge receipts");
+        assert_eq!(judgment.receipts.len(), 4);
+        let release = tempfile::tempdir().expect("temporary release root");
+        let stage = release.path().join("stage");
+        let manifest = judgment
+            .stage(workspace_of(&contract), evidence.path(), &stage)
+            .expect("stage judged release");
+        assert!(manifest.artifacts.is_empty());
+        assert!(stage.join("support.json").is_file());
+
+        let receipt_path = evidence.path().join("source--global/receipt.json");
+        let mut receipt = Receipt::load(&receipt_path).expect("load source receipt");
+        receipt.command = vec!["cargo".to_owned(), "metadata".to_owned()];
+        write_json_atomic(&receipt_path, &receipt).expect("tamper with source receipt");
+        let error = Adjudication::judge(&contract, evidence.path())
+            .err()
+            .expect("tampered command must fail");
+        assert!(error.to_string().contains("planned node"));
+    }
 }

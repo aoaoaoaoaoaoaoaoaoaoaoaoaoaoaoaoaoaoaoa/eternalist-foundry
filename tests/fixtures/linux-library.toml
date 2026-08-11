@@ -1,0 +1,42 @@
+schema = 1
+
+[product]
+name = "Linux Fixture Library"
+package = "eternalist-foundry"
+profile = "rust-library"
+
+[coordinates]
+release-tested = ["linux-x86_64"]
+
+[[exclusions]]
+coordinate = "macos-aarch64"
+reason = "The fixture deliberately exercises one native evidence cell."
+
+[[exclusions]]
+coordinate = "macos-x86_64"
+reason = "The fixture deliberately exercises one native evidence cell."
+
+[[exclusions]]
+coordinate = "windows-x86_64"
+reason = "The fixture deliberately exercises one native evidence cell."
+
+[[proofs]]
+name = "source"
+laws = ["source"]
+run = ["cargo", "--version"]
+
+[[proofs]]
+name = "security"
+laws = ["security"]
+run = ["cargo", "--version"]
+
+[[proofs]]
+name = "source-package"
+laws = ["source-package"]
+run = ["cargo", "--version"]
+
+[[proofs]]
+name = "host"
+laws = ["host"]
+run = ["cargo", "--version"]
+coordinates = ["linux-x86_64"]

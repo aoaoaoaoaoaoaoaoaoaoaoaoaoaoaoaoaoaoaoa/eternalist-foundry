@@ -1,0 +1,95 @@
+schema = 1
+
+[product]
+name = "Fixture GUI"
+package = "fixture-gui"
+binary = "fixture-gui"
+identifier = "moe.eternalist.fixture-gui"
+profile = "native-gui"
+
+[coordinates]
+release-tested = [
+  "linux-x86_64-x11-vulkan",
+  "linux-x86_64-wayland-vulkan",
+  "macos-aarch64-metal",
+  "macos-x86_64-metal",
+  "windows-x86_64-dx12",
+]
+
+[delivery]
+linux = "cargo"
+macos = "dmg"
+windows = "nsis-current-user"
+
+[trust]
+macos = "unsigned-incubation"
+windows = "unsigned-incubation"
+
+[[proofs]]
+name = "source"
+laws = ["source"]
+run = ["cargo", "test"]
+
+[[proofs]]
+name = "security"
+laws = ["security"]
+run = ["cargo", "audit"]
+
+[[proofs]]
+name = "source-package"
+laws = ["source-package"]
+run = ["cargo", "package"]
+
+[[proofs]]
+name = "host"
+laws = ["host"]
+run = ["cargo", "test"]
+coordinates = [
+  "linux-x86_64-x11-vulkan",
+  "linux-x86_64-wayland-vulkan",
+  "macos-aarch64-metal",
+  "macos-x86_64-metal",
+  "windows-x86_64-dx12",
+]
+
+[[proofs]]
+name = "first-present"
+laws = ["first-present"]
+run = ["cargo", "run", "--package", "portability-witness"]
+coordinates = [
+  "linux-x86_64-x11-vulkan",
+  "linux-x86_64-wayland-vulkan",
+  "macos-aarch64-metal",
+  "macos-x86_64-metal",
+  "windows-x86_64-dx12",
+]
+
+[[proofs]]
+name = "lifecycle"
+laws = ["lifecycle"]
+run = ["cargo", "run", "--package", "lifecycle-witness"]
+coordinates = [
+  "linux-x86_64-x11-vulkan",
+  "linux-x86_64-wayland-vulkan",
+  "macos-aarch64-metal",
+  "macos-x86_64-metal",
+  "windows-x86_64-dx12",
+]
+
+[[proofs]]
+name = "native-acceptance"
+laws = ["native-acceptance"]
+run = ["cargo", "run", "--package", "acceptance-witness"]
+coordinates = ["linux-x86_64-x11-vulkan"]
+
+[[proofs]]
+name = "artifact-macos"
+laws = ["artifact"]
+run = ["cargo", "run", "--package", "package-witness", "--", "dmg"]
+coordinates = ["macos-aarch64-metal"]
+
+[[proofs]]
+name = "artifact-windows"
+laws = ["artifact"]
+run = ["cargo", "run", "--package", "package-witness", "--", "nsis"]
+coordinates = ["windows-x86_64-dx12"]

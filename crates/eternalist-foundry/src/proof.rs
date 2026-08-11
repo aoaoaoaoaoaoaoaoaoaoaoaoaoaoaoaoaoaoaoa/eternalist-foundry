@@ -17,7 +17,7 @@ use crate::{
     plan::Plan,
 };
 
-pub const RECEIPT_SCHEMA: u32 = 1;
+pub const RECEIPT_SCHEMA: u32 = 2;
 
 pub fn execute(
     contract_path: &Path,
@@ -86,6 +86,7 @@ pub fn execute(
         node: node.id.clone(),
         proof: proof.name.clone(),
         coordinate,
+        host: HostWitness::current(),
         laws: proof.laws.clone(),
         source,
         command: proof.run.clone(),
@@ -121,6 +122,7 @@ pub struct Receipt {
     pub node: String,
     pub proof: String,
     pub coordinate: Option<Coordinate>,
+    pub host: HostWitness,
     pub laws: Vec<Law>,
     pub source: String,
     pub command: Vec<String>,
@@ -130,6 +132,22 @@ pub struct Receipt {
     pub exit_code: Option<i32>,
     pub run_url: Option<String>,
     pub artifacts: Vec<Artifact>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostWitness {
+    pub os: String,
+    pub arch: String,
+}
+
+impl HostWitness {
+    fn current() -> Self {
+        Self {
+            os: env::consts::OS.to_owned(),
+            arch: env::consts::ARCH.to_owned(),
+        }
+    }
 }
 
 impl Receipt {

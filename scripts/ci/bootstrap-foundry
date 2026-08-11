@@ -1,0 +1,26 @@
+#!/bin/sh
+set -eu
+
+: "${RUNNER_TEMP:?RUNNER_TEMP is required}"
+: "${GITHUB_PATH:?GITHUB_PATH is required}"
+: "${GITHUB_ENV:?GITHUB_ENV is required}"
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
+target=$RUNNER_TEMP/eternalist-foundry-target
+destination=$RUNNER_TEMP/eternalist-foundry-bin
+mkdir -p "$target" "$destination"
+
+(
+    cd "$root"
+    CARGO_TARGET_DIR=$target cargo build --locked --release --bin foundry
+)
+
+case ${RUNNER_OS-} in
+    Windows) executable=foundry.exe ;;
+    *) executable=foundry ;;
+esac
+cp "$target/release/$executable" "$destination/$executable"
+chmod +x "$destination/$executable"
+
+printf '%s\n' "$destination" >> "$GITHUB_PATH"
+printf 'FOUNDRY_ENGINE_ROOT=%s\n' "$root" >> "$GITHUB_ENV"

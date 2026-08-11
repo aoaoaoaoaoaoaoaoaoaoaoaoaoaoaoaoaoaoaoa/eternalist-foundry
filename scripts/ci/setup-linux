@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+setup=${1-}
+case $setup in
+    ordinary) exit 0 ;;
+    x11|wayland) ;;
+    *)
+        printf 'setup-linux: unknown setup %q\n' "$setup" >&2
+        exit 64
+        ;;
+esac
+[[ ${RUNNER_OS-} == Linux ]] || {
+    printf 'setup-linux: %s setup requires a Linux runner\n' "$setup" >&2
+    exit 64
+}
+: "${RUNNER_TEMP:?RUNNER_TEMP is required}"
+: "${GITHUB_ENV:?GITHUB_ENV is required}"
+
+packages=(
+    bubblewrap
+    dbus-user-session
+    libxkbcommon0
+    mesa-vulkan-drivers
+)
+case $setup in
+    x11) packages+=(i3-wm libxkbcommon-x11-0 xauth xvfb) ;;
+    wayland) packages+=(weston) ;;
+esac
+
+sudo apt-get update
+sudo apt-get install --no-install-recommends --yes "${packages[@]}"
+
+if sysctl -N kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then
+    sudo sysctl --write kernel.apparmor_restrict_unprivileged_userns=0
+fi
+if sysctl -N kernel.unprivileged_userns_clone >/dev/null 2>&1; then
+    sudo sysctl --write kernel.unprivileged_userns_clone=1
+fi
+
+sudo loginctl enable-linger "$USER"
+sudo systemctl start "user@$(id -u).service"
+runtime=/run/user/$(id -u)
+for _ in {1..50}; do
+    [[ -S $runtime/bus ]] && break
+    sleep 0.1
+done
+[[ -S $runtime/bus ]] || {
+    printf 'setup-linux: user D-Bus did not appear at %s/bus\n' "$runtime" >&2
+    exit 1
+}
+printf 'XDG_RUNTIME_DIR=%s\n' "$runtime" >> "$GITHUB_ENV"
+printf 'DBUS_SESSION_BUS_ADDRESS=unix:path=%s/bus\n' "$runtime" >> "$GITHUB_ENV"
+
+lavapipe=$RUNNER_TEMP/eternalist-foundry-lavapipe
+library=$(find /usr/lib -name libvulkan_lvp.so -print -quit)
+manifest=$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' -print -quit)
+[[ -f $library ]] || {
+    printf '%s\n' 'setup-linux: Lavapipe library is absent' >&2
+    exit 1
+}
+[[ -f $manifest ]] || {
+    printf '%s\n' 'setup-linux: Lavapipe manifest is absent' >&2
+    exit 1
+}
+install -d "$lavapipe/usr/lib" "$lavapipe/usr/share/vulkan/icd.d"
+ln -s "$library" "$lavapipe/usr/lib/libvulkan_lvp.so"
+install -m 0644 "$manifest" "$lavapipe/usr/share/vulkan/icd.d/lvp_icd.json"
+printf 'EGUI_TESTER_LAVAPIPE=%s\n' "$lavapipe" >> "$GITHUB_ENV"
+
+case $setup in
+    x11)
+        command -v Xvfb >/dev/null
+        command -v i3 >/dev/null
+        ;;
+    wayland)
+        command -v weston >/dev/null
+        command -v weston-screenshooter >/dev/null
+        ;;
+esac

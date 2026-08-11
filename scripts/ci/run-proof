@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+test "$#" -eq 4 || {
+    printf '%s\n' 'usage: run-proof CONTRACT PROOF COORDINATE EVIDENCE_ROOT' >&2
+    exit 64
+}
+
+contract=$1
+proof=$2
+coordinate=$3
+evidence_root=$4
+set -- foundry --contract "$contract" prove "$proof" --evidence-root "$evidence_root"
+if test -n "$coordinate" && test "$coordinate" != null; then
+    set -- "$@" --coordinate "$coordinate"
+fi
+exec "$@"

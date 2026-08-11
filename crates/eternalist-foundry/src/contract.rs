@@ -65,6 +65,12 @@ impl Contract {
             .copied()
     }
 
+    pub fn release_platforms(&self) -> BTreeSet<Platform> {
+        self.release_coordinates()
+            .map(Coordinate::platform)
+            .collect()
+    }
+
     pub fn proof(&self, name: &str) -> Option<&Proof> {
         self.proofs.iter().find(|proof| proof.name == name)
     }
@@ -119,11 +125,7 @@ impl Contract {
     }
 
     fn validate_delivery(&self) -> Result<()> {
-        let release_platforms = self
-            .release_coordinates()
-            .map(Coordinate::platform)
-            .collect::<BTreeSet<_>>();
-        for platform in release_platforms {
+        for platform in self.release_platforms() {
             if self.product.profile == Profile::RustLibrary {
                 continue;
             }
@@ -174,25 +176,38 @@ impl Contract {
                     if coordinate.display() == Some(DisplayBackend::X11) {
                         self.require_coordinate_law(*coordinate, Law::NativeAcceptance)?;
                     }
-                    self.require_artifact_when_delivered(*coordinate)?;
                 }
-                Profile::PortableCli => {
+                Profile::PortableCli | Profile::PlatformBound => {
                     self.require_coordinate_law(*coordinate, Law::Lifecycle)?;
-                    self.require_artifact_when_delivered(*coordinate)?;
                 }
                 Profile::RustLibrary => {}
-                Profile::PlatformBound => {
-                    self.require_coordinate_law(*coordinate, Law::Lifecycle)?;
-                }
             }
         }
-        Ok(())
+        self.require_delivery_artifacts()
     }
 
-    fn require_artifact_when_delivered(&self, coordinate: Coordinate) -> Result<()> {
-        let delivery = self.delivery.for_platform(coordinate.platform());
-        if delivery.is_some_and(Delivery::produces_artifact) {
-            self.require_coordinate_law(coordinate, Law::Artifact)?;
+    fn require_delivery_artifacts(&self) -> Result<()> {
+        let release = self.release_coordinates().collect::<BTreeSet<_>>();
+        for platform in self.release_platforms() {
+            let Some(delivery) = self.delivery.for_platform(platform) else {
+                continue;
+            };
+            if !delivery.produces_artifact() {
+                continue;
+            }
+            require(
+                self.proofs.iter().any(|proof| {
+                    proof.laws.contains(&Law::Artifact)
+                        && proof.coordinates.iter().any(|coordinate| {
+                            release.contains(coordinate) && coordinate.platform() == platform
+                        })
+                }),
+                || {
+                    format!(
+                        "delivery `{delivery}` on `{platform}` has no release-tested artifact proof"
+                    )
+                },
+            )?;
         }
         Ok(())
     }
@@ -341,6 +356,21 @@ impl Coordinate {
         }
     }
 
+    pub const fn os(self) -> &'static str {
+        match self.platform() {
+            Platform::Linux => "linux",
+            Platform::Macos => "macos",
+            Platform::Windows => "windows",
+        }
+    }
+
+    pub const fn arch(self) -> &'static str {
+        match self {
+            Self::MacosAarch64Metal | Self::MacosAarch64 => "aarch64",
+            _ => "x86_64",
+        }
+    }
+
     pub const fn display(self) -> Option<DisplayBackend> {
         match self {
             Self::LinuxX86_64X11Vulkan => Some(DisplayBackend::X11),
@@ -370,16 +400,11 @@ impl Coordinate {
     }
 
     pub fn inhabits_current_host(self) -> bool {
-        let os = match self.platform() {
-            Platform::Linux => "linux",
-            Platform::Macos => "macos",
-            Platform::Windows => "windows",
-        };
-        let arch = match self {
-            Self::MacosAarch64Metal | Self::MacosAarch64 => "aarch64",
-            _ => "x86_64",
-        };
-        std::env::consts::OS == os && std::env::consts::ARCH == arch
+        self.inhabits(std::env::consts::OS, std::env::consts::ARCH)
+    }
+
+    pub fn inhabits(self, os: &str, arch: &str) -> bool {
+        self.os() == os && self.arch() == arch
     }
 }
 
@@ -763,5 +788,23 @@ mod tests {
         for alien in ["", "Native", "native_host", "native--host", "native-"] {
             assert!(!valid_slug(alien), "accepted {alien}");
         }
+    }
+
+    #[test]
+    fn one_universal_artifact_proof_covers_the_macos_delivery() {
+        let contract =
+            toml::from_str::<Contract>(include_str!("../../../tests/fixtures/native-gui.toml"))
+                .expect("parse native GUI fixture");
+        contract.validate().expect("validate native GUI fixture");
+        let artifact = contract
+            .proof("artifact-macos")
+            .expect("macOS artifact proof");
+        assert_eq!(artifact.coordinates, [Coordinate::MacosAarch64Metal]);
+        assert!(
+            contract
+                .coordinates
+                .release_tested
+                .contains(&Coordinate::MacosX86_64Metal)
+        );
     }
 }

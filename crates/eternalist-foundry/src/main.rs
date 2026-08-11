@@ -60,6 +60,12 @@ enum Directive {
         #[arg()]
         output: Option<PathBuf>,
     },
+    /// Judge evidence and stage collision-free release assets.
+    Stage {
+        #[arg(default_value = "evidence")]
+        evidence_root: PathBuf,
+        output: PathBuf,
+    },
     /// Install the repository's declared Rust toolchain through rustup.
     Toolchain {
         #[arg(long, default_value = "rust-toolchain.toml")]
@@ -139,6 +145,20 @@ fn execute(invocation: Invocation) -> Result<()> {
                 manifest.product.name,
                 manifest.product.version,
                 manifest.release_tested.len(),
+                output.display()
+            );
+        }
+        Directive::Stage {
+            evidence_root,
+            output,
+        } => {
+            let judgment = Adjudication::judge(&invocation.contract, &evidence_root)?;
+            let manifest = judgment.stage(workspace, &evidence_root, &output)?;
+            println!(
+                "{} {}: staged {} artifact(s) in {}",
+                manifest.product.name,
+                manifest.product.version,
+                manifest.artifacts.len() + 1,
                 output.display()
             );
         }
