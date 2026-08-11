@@ -10,6 +10,16 @@ contract=$1
 proof=$2
 coordinate=$3
 evidence_root=$4
+
+# GitHub's Windows image exposes both Git Bash and the unrelated WSL launcher as
+# `bash`. Carry the interpreter already executing this scheduler across the
+# native Rust process boundary so product proofs cannot fall into WSL.
+foundry_bash=$(command -v bash)
+if command -v cygpath >/dev/null 2>&1; then
+    foundry_bash=$(cygpath -w "$foundry_bash")
+fi
+export FOUNDRY_BASH="$foundry_bash"
+
 set -- foundry --contract "$contract" prove "$proof" --evidence-root "$evidence_root"
 if test -n "$coordinate" && test "$coordinate" != null; then
     set -- "$@" --coordinate "$coordinate"

@@ -1,5 +1,6 @@
 use std::{
     env,
+    ffi::{OsStr, OsString},
     fs::{self, File},
     io::{BufReader, Read, Write},
     path::{Path, PathBuf},
@@ -65,7 +66,8 @@ pub fn execute(
         .run
         .first()
         .ok_or_else(|| Error::Contract(format!("proof `{proof_name}` has no executable")))?;
-    let mut command = Command::new(command_name);
+    let executable = proof_executable(command_name, env::var_os("FOUNDRY_BASH").as_deref());
+    let mut command = Command::new(executable);
     let _command = command
         .args(&proof.run[1..])
         .current_dir(workspace)
@@ -329,6 +331,16 @@ fn command_display(command: &[String]) -> String {
         .join(" ")
 }
 
+fn proof_executable(command: &str, foundry_bash: Option<&OsStr>) -> OsString {
+    if command == "bash"
+        && let Some(foundry_bash) = foundry_bash
+    {
+        foundry_bash.to_owned()
+    } else {
+        command.into()
+    }
+}
+
 fn shellish(value: &str) -> String {
     if value.bytes().all(|byte| {
         byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-' | b':' | b'=')
@@ -342,6 +354,21 @@ fn shellish(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn declared_bash_defeats_host_path_ambiguity() {
+        assert_eq!(
+            proof_executable(
+                "bash",
+                Some(OsStr::new("C:\\Program Files\\Git\\bin\\bash.exe"))
+            ),
+            OsString::from("C:\\Program Files\\Git\\bin\\bash.exe")
+        );
+        assert_eq!(
+            proof_executable("cargo", Some(OsStr::new("alien-bash"))),
+            OsString::from("cargo")
+        );
+    }
 
     #[test]
     fn artifact_inventory_is_sorted_and_content_addressed() {
