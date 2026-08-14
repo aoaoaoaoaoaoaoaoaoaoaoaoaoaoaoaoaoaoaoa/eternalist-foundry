@@ -13,7 +13,7 @@ if find crates -path '*/src/lib.rs' -print -quit | grep -q .; then
     fail 'the policy engine must remain binary-only'
 fi
 
-if grep -En '^[[:space:]]*(eternalist-apps|dwemer-poolrooms|egui|eframe|winit|egui-tester)[[:space:]]*=' \
+if grep -En '^[[:space:]]*(eternalist-apps|brass-poolrooms|egui|eframe|winit|egui-tester)[[:space:]]*=' \
     Cargo.toml crates/*/Cargo.toml; then
     fail 'application or GUI dependencies crossed into the policy engine'
 fi
