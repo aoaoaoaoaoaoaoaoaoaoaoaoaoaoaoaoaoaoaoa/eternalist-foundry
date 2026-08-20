@@ -694,6 +694,7 @@ pub enum Law {
     Source,
     Security,
     SourcePackage,
+    Demonstration,
     Host,
     FirstPresent,
     NativeAcceptance,
@@ -703,7 +704,10 @@ pub enum Law {
 
 impl Law {
     const fn is_global(self) -> bool {
-        matches!(self, Self::Source | Self::Security | Self::SourcePackage)
+        matches!(
+            self,
+            Self::Source | Self::Security | Self::SourcePackage | Self::Demonstration
+        )
     }
 
     const fn needs_display(self) -> bool {
@@ -720,6 +724,7 @@ impl fmt::Display for Law {
             Self::Source => "source",
             Self::Security => "security",
             Self::SourcePackage => "source-package",
+            Self::Demonstration => "demonstration",
             Self::Host => "host",
             Self::FirstPresent => "first-present",
             Self::NativeAcceptance => "native-acceptance",

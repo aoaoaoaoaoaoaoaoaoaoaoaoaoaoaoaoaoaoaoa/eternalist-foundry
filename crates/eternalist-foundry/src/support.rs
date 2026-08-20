@@ -69,6 +69,13 @@ impl Adjudication {
                 )));
             }
             receipt.validate_artifacts(&cell.join("artifacts"))?;
+            if receipt.laws.contains(&Law::Demonstration) && receipt.artifacts.len() != 1 {
+                return Err(Error::Contract(format!(
+                    "demonstration receipt `{}` contains {} artifacts, expected exactly one",
+                    node.id,
+                    receipt.artifacts.len()
+                )));
+            }
             receipts.push(receipt);
         }
         Ok(Self {

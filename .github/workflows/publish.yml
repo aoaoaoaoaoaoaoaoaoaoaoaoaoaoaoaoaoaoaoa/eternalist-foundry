@@ -77,4 +77,22 @@ jobs:
               --title "$GITHUB_REF_NAME" \
               --generate-notes
           fi
-          gh release upload "$GITHUB_REF_NAME" "$FOUNDRY_RELEASE_STAGE"/* --clobber
+          release=$(mktemp)
+          witness=$(mktemp -d)
+          trap 'rm -f "$release"; rm -rf "$witness"' EXIT
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" >"$release"
+          for asset in "$FOUNDRY_RELEASE_STAGE"/*; do
+            name=${asset##*/}
+            url=$(jq -r --arg name "$name" \
+              '.assets[] | select(.name == $name) | .url' "$release")
+            if [[ -z "$url" ]]; then
+              gh release upload "$GITHUB_REF_NAME" "$asset"
+              continue
+            fi
+            existing="$witness/$name"
+            gh api -H 'Accept: application/octet-stream' "$url" >"$existing"
+            if ! cmp -s "$asset" "$existing"; then
+              printf 'release asset %q already exists with different bytes\n' "$name" >&2
+              exit 1
+            fi
+          done

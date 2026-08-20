@@ -115,10 +115,12 @@ runtime evidence exists. Supported means the native host gate passes, but the
 release carries no stronger claim.
 
 Proofs discharge closed laws. Global proofs cover source, dependency security,
-and the publishable Cargo graph. Coordinate proofs cover host behavior, first
-present, lifecycle, X11 acceptance, and release artifacts. Delivery is a
-platform fact rather than an architecture fact, so one witnessed universal DMG
-may serve both native macOS coordinates. See
+the publishable Cargo graph, and an optional demonstration artifact. A
+demonstration proof produces exactly one immutable archive; it does not create
+a separate product or host-support claim. Coordinate proofs cover host
+behavior, first present, lifecycle, X11 acceptance, and release artifacts.
+Delivery is a platform fact rather than an architecture fact, so one witnessed
+universal DMG may serve both native macOS coordinates. See
 [`tests/fixtures/native-gui.toml`](tests/fixtures/native-gui.toml) for the full
 native profile.
 
