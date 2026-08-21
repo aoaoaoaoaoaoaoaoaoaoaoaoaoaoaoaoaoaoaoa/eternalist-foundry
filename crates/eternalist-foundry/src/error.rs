@@ -21,6 +21,8 @@ pub enum Error {
     Json(#[from] serde_json::Error),
     #[error("invalid Foundry contract: {0}")]
     Contract(String),
+    #[error("invalid Cargo source boundary: {0}")]
+    Manifest(String),
     #[error("proof `{proof}` failed with {status}")]
     ProofFailed { proof: String, status: ExitStatus },
     #[error("cannot execute `{command}`: {source}")]

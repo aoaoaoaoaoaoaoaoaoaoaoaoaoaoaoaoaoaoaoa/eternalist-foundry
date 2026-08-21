@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     Result,
     error::{Error, io},
+    manifest,
 };
 
 pub const SCHEMA: u32 = 1;
@@ -39,6 +40,7 @@ impl Contract {
             source,
         })?;
         contract.validate()?;
+        manifest::enforce(workspace_of(path))?;
         Ok(contract)
     }
 

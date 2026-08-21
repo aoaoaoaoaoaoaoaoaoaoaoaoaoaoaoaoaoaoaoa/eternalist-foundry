@@ -15,6 +15,7 @@ use crate::{
 
 mod contract;
 mod error;
+mod manifest;
 mod plan;
 mod proof;
 mod support;
