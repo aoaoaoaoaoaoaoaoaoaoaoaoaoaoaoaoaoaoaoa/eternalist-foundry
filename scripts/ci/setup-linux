@@ -32,7 +32,18 @@ fi
 # A stalled mirror must fail the step quickly rather than consume the job's
 # whole budget.
 apt=(sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=3)
-"${apt[@]}" update
+# A mirror mid-sync answers with mismatched indexes for a minute or two;
+# refresh again across that window before giving up.
+for attempt in 1 2 3 4 5; do
+    if "${apt[@]}" update; then
+        break
+    fi
+    if (( attempt == 5 )); then
+        printf 'setup-linux: package indexes never refreshed\n' >&2
+        exit 1
+    fi
+    sleep 30
+done
 "${apt[@]}" install --no-install-recommends --yes "${packages[@]}"
 [[ $setup == ordinary ]] && exit 0
 
