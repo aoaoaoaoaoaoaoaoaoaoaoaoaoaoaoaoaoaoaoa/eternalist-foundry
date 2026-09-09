@@ -43,11 +43,17 @@ impl Adjudication {
                     node.id, receipt.schema
                 )));
             }
+            // A cross-built node is proved by the Linux runner, not by a host
+            // that inhabits its coordinate.
+            let host_matches = if node.cross {
+                receipt.host.os == "linux"
+            } else {
+                receipt.host.os == node.os && receipt.host.arch == node.arch
+            };
             if receipt.node != node.id
                 || receipt.proof != node.proof
                 || receipt.coordinate != node.coordinate
-                || receipt.host.os != node.os
-                || receipt.host.arch != node.arch
+                || !host_matches
                 || receipt.laws != node.laws
                 || receipt.command != proof_command(&contract, &node.proof)?
             {
