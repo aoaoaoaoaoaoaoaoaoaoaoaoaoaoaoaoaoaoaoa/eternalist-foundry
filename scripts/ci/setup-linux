@@ -29,8 +29,11 @@ if [[ $setup != ordinary ]]; then
         wayland) packages+=(weston) ;;
     esac
 fi
-sudo apt-get update
-sudo apt-get install --no-install-recommends --yes "${packages[@]}"
+# A stalled mirror must fail the step quickly rather than consume the job's
+# whole budget.
+apt=(sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=3)
+"${apt[@]}" update
+"${apt[@]}" install --no-install-recommends --yes "${packages[@]}"
 [[ $setup == ordinary ]] && exit 0
 
 if sysctl -N kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then
