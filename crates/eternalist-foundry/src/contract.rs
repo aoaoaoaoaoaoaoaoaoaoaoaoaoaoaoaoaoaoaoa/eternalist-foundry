@@ -115,7 +115,10 @@ impl Contract {
 
         if self.product.profile != Profile::PlatformBound {
             for coordinate in &carried {
-                require(self.product.profile.baseline().contains(coordinate), || {
+                let admitted = self.product.profile.baseline().contains(coordinate)
+                    || (coordinate.cross_built()
+                        && self.coordinates.supported.contains(coordinate));
+                require(admitted, || {
                     format!(
                         "coordinate `{coordinate}` does not belong to profile `{}`",
                         self.product.profile
@@ -316,6 +319,11 @@ impl Coordinates {
         })?;
         reject_duplicates("release-tested coordinate", &self.release_tested)?;
         reject_duplicates("supported coordinate", &self.supported)?;
+        for coordinate in &self.release_tested {
+            require(!coordinate.cross_built(), || {
+                format!("cross-built coordinate `{coordinate}` cannot be release-tested")
+            })?;
+        }
         let release = self.release_tested.iter().copied().collect::<BTreeSet<_>>();
         let supported = self.supported.iter().copied().collect::<BTreeSet<_>>();
         ensure_disjoint("release-tested", &release, "supported", &supported)
@@ -342,6 +350,10 @@ pub enum Coordinate {
     MacosX86_64,
     #[serde(rename = "windows-x86_64")]
     WindowsX86_64,
+    /// Cross-built on the Linux runner; never inhabits a host, so it is only
+    /// ever supported, and its host law is a cross build.
+    #[serde(rename = "android-aarch64")]
+    AndroidAarch64,
 }
 
 impl Coordinate {
@@ -355,6 +367,7 @@ impl Coordinate {
             | Self::MacosAarch64
             | Self::MacosX86_64 => Platform::Macos,
             Self::WindowsX86_64Dx12 | Self::WindowsX86_64 => Platform::Windows,
+            Self::AndroidAarch64 => Platform::Android,
         }
     }
 
@@ -363,12 +376,13 @@ impl Coordinate {
             Platform::Linux => "linux",
             Platform::Macos => "macos",
             Platform::Windows => "windows",
+            Platform::Android => "android",
         }
     }
 
     pub const fn arch(self) -> &'static str {
         match self {
-            Self::MacosAarch64Metal | Self::MacosAarch64 => "aarch64",
+            Self::MacosAarch64Metal | Self::MacosAarch64 | Self::AndroidAarch64 => "aarch64",
             _ => "x86_64",
         }
     }
@@ -398,7 +412,18 @@ impl Coordinate {
             Self::MacosAarch64Metal | Self::MacosAarch64 => "aarch64-apple-darwin",
             Self::MacosX86_64Metal | Self::MacosX86_64 => "x86_64-apple-darwin",
             Self::WindowsX86_64Dx12 | Self::WindowsX86_64 => "x86_64-pc-windows-msvc",
+            Self::AndroidAarch64 => "aarch64-linux-android",
         }
+    }
+
+    /// The runner cannot inhabit this coordinate; proofs cross-build for it.
+    pub const fn cross_built(self) -> bool {
+        matches!(self, Self::AndroidAarch64)
+    }
+
+    /// Proofs for this coordinate run on a Linux runner.
+    pub const fn runs_on_linux(self) -> bool {
+        matches!(self.platform(), Platform::Linux | Platform::Android)
     }
 
     pub fn inhabits_current_host(self) -> bool {
@@ -422,6 +447,7 @@ impl fmt::Display for Coordinate {
             Self::MacosAarch64 => "macos-aarch64",
             Self::MacosX86_64 => "macos-x86_64",
             Self::WindowsX86_64 => "windows-x86_64",
+            Self::AndroidAarch64 => "android-aarch64",
         })
     }
 }
@@ -440,6 +466,7 @@ impl FromStr for Coordinate {
             "macos-aarch64" => Ok(Self::MacosAarch64),
             "macos-x86_64" => Ok(Self::MacosX86_64),
             "windows-x86_64" => Ok(Self::WindowsX86_64),
+            "android-aarch64" => Ok(Self::AndroidAarch64),
             _ => Err(Error::Contract(format!("unknown coordinate `{value}`"))),
         }
     }
@@ -451,6 +478,7 @@ pub enum Platform {
     Linux,
     Macos,
     Windows,
+    Android,
 }
 
 impl fmt::Display for Platform {
@@ -459,6 +487,7 @@ impl fmt::Display for Platform {
             Self::Linux => "linux",
             Self::Macos => "macos",
             Self::Windows => "windows",
+            Self::Android => "android",
         })
     }
 }
@@ -494,6 +523,7 @@ impl DeliveryPolicy {
             Platform::Linux => self.linux,
             Platform::Macos => self.macos,
             Platform::Windows => self.windows,
+            Platform::Android => None,
         }
     }
 }
@@ -552,6 +582,7 @@ impl TrustPolicy {
             Platform::Linux => Some(Trust::NotApplicable),
             Platform::Macos => self.macos,
             Platform::Windows => self.windows,
+            Platform::Android => None,
         }
     }
 }
@@ -687,7 +718,7 @@ impl Proof {
         }
         if !self.packages.is_empty() {
             for coordinate in &self.coordinates {
-                require(coordinate.platform() == Platform::Linux, || {
+                require(coordinate.runs_on_linux(), || {
                     format!(
                         "proof `{}` declares packages on non-Linux coordinate `{coordinate}`",
                         self.name

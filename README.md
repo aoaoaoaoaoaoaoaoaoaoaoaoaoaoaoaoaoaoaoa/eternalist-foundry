@@ -106,6 +106,9 @@ compilation; the receipt still records the exact law set and host.
 Library and CLI integration proofs may declare `setup = "x11"` or
 `setup = "wayland"` when their generic Linux coordinate needs a private display
 substrate. Native GUI coordinates derive the same setup from their coordinate.
+`android-aarch64` is a cross-built coordinate: the Linux runner adds its
+target and the product's host proof builds for it, so it can only be
+supported, never release-tested.
 A proof on Linux coordinates may also declare `packages = ["libjxl-tools"]`,
 the Debian packages its runner installs first; a product's runtime
 dependencies belong there rather than in the proof command.

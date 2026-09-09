@@ -73,6 +73,8 @@ pub struct Node {
     pub setup: Setup,
     pub packages: Vec<String>,
     pub target: Option<String>,
+    /// The runner must add the target before the proof can build for it.
+    pub cross: bool,
     pub delivery: Option<Delivery>,
     pub timeout_minutes: u16,
 }
@@ -101,6 +103,7 @@ impl Node {
             setup: proof.setup_for(coordinate),
             packages: proof.packages.clone(),
             target,
+            cross: coordinate.is_some_and(Coordinate::cross_built),
             delivery: coordinate.and_then(|value| contract.delivery.for_platform(value.platform())),
             timeout_minutes: proof.timeout_minutes,
         }

@@ -77,6 +77,12 @@ jobs:
         env:
           FOUNDRY_TOOLCHAIN: ${{ inputs.toolchain }}
         run: foundry toolchain --file "$FOUNDRY_TOOLCHAIN"
+      - name: Install cross target
+        if: ${{ matrix.cross }}
+        shell: bash
+        env:
+          FOUNDRY_TARGET: ${{ matrix.target }}
+        run: rustup target add "$FOUNDRY_TARGET"
       - name: Restore trusted Rust cache
         if: ${{ !contains(matrix.laws, 'security') }}
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
