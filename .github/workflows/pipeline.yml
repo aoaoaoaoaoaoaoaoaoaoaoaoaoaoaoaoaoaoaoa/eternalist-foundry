@@ -83,12 +83,15 @@ jobs:
         with:
           cache-bin: false
           save-if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
-      - name: Raise Linux display substrate
-        if: ${{ runner.os == 'Linux' && matrix.setup != 'ordinary' }}
+      - name: Raise Linux substrate
+        if: ${{ runner.os == 'Linux' && (matrix.setup != 'ordinary' || join(matrix.packages, ' ') != '') }}
         shell: bash
         env:
           FOUNDRY_SETUP: ${{ matrix.setup }}
-        run: bash "$FOUNDRY_ENGINE_ROOT/scripts/ci/setup-linux" "$FOUNDRY_SETUP"
+          FOUNDRY_PACKAGES: ${{ join(matrix.packages, ' ') }}
+        run: |
+          read -ra packages <<<"$FOUNDRY_PACKAGES"
+          bash "$FOUNDRY_ENGINE_ROOT/scripts/ci/setup-linux" "$FOUNDRY_SETUP" "${packages[@]}"
       - name: Install pinned dependency auditor
         if: ${{ contains(matrix.laws, 'security') }}
         uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11

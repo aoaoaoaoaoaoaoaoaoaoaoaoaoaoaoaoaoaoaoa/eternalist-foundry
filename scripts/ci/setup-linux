@@ -1,36 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# usage: setup-linux SETUP [PACKAGE...]
+# SETUP is the proof's display substrate; PACKAGEs are the Debian packages the
+# proof declares in its contract.
 setup=${1-}
+shift || true
+declared=("$@")
 case $setup in
-    ordinary) exit 0 ;;
-    x11|wayland) ;;
+    ordinary|x11|wayland) ;;
     *)
         printf 'setup-linux: unknown setup %q\n' "$setup" >&2
         exit 64
         ;;
 esac
+[[ $setup == ordinary && ${#declared[@]} -eq 0 ]] && exit 0
 [[ ${RUNNER_OS-} == Linux ]] || {
     printf 'setup-linux: %s setup requires a Linux runner\n' "$setup" >&2
     exit 64
 }
 : "${RUNNER_TEMP:?RUNNER_TEMP is required}"
 : "${GITHUB_ENV:?GITHUB_ENV is required}"
-
-packages=(
-    bubblewrap
-    dbus-user-session
-    libwayland-dev
-    libxkbcommon0
-    mesa-vulkan-drivers
-)
-case $setup in
-    x11) packages+=(i3-wm libxkbcommon-x11-0 x11-utils xauth xvfb) ;;
-    wayland) packages+=(weston) ;;
-esac
-
+packages=("${declared[@]}")
+if [[ $setup != ordinary ]]; then
+    packages+=(bubblewrap dbus-user-session libwayland-dev libxkbcommon0 mesa-vulkan-drivers)
+    case $setup in
+        x11) packages+=(i3-wm libxkbcommon-x11-0 x11-utils xauth xvfb) ;;
+        wayland) packages+=(weston) ;;
+    esac
+fi
 sudo apt-get update
 sudo apt-get install --no-install-recommends --yes "${packages[@]}"
+[[ $setup == ordinary ]] && exit 0
 
 if sysctl -N kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then
     sudo sysctl --write kernel.apparmor_restrict_unprivileged_userns=0

@@ -575,6 +575,9 @@ pub struct Proof {
     pub coordinates: Vec<Coordinate>,
     #[serde(default)]
     pub setup: Option<Setup>,
+    /// Debian packages the Linux runner installs before the proof runs.
+    #[serde(default)]
+    pub packages: Vec<String>,
     #[serde(default = "default_timeout")]
     pub timeout_minutes: u16,
 }
@@ -605,6 +608,8 @@ impl Proof {
                 self.name, self.timeout_minutes
             )
         })?;
+
+        self.validate_packages()?;
 
         let global = self.laws.iter().any(|law| law.is_global());
         let coordinate = self.laws.iter().any(|law| !law.is_global());
@@ -665,6 +670,29 @@ impl Proof {
                         )
                     })?;
                 }
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_packages(&self) -> Result<()> {
+        reject_duplicates(&format!("package in proof `{}`", self.name), &self.packages)?;
+        for package in &self.packages {
+            require(valid_package(package), || {
+                format!(
+                    "proof `{}` names `{package}` outside the Debian package grammar",
+                    self.name
+                )
+            })?;
+        }
+        if !self.packages.is_empty() {
+            for coordinate in &self.coordinates {
+                require(coordinate.platform() == Platform::Linux, || {
+                    format!(
+                        "proof `{}` declares packages on non-Linux coordinate `{coordinate}`",
+                        self.name
+                    )
+                })?;
             }
         }
         Ok(())
@@ -752,6 +780,17 @@ impl fmt::Display for Setup {
             Self::Wayland => "wayland",
         })
     }
+}
+
+/// Debian source and binary package names: at least two characters from
+/// lowercase ASCII, digits, `+`, `-`, and `.`, opening with an alphanumeric.
+fn valid_package(value: &str) -> bool {
+    value.len() >= 2
+        && value.bytes().enumerate().all(|(index, byte)| {
+            byte.is_ascii_lowercase()
+                || byte.is_ascii_digit()
+                || (index > 0 && matches!(byte, b'+' | b'-' | b'.'))
+        })
 }
 
 fn valid_slug(value: &str) -> bool {
