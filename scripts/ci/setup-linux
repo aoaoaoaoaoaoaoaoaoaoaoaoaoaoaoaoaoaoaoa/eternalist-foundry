@@ -32,6 +32,12 @@ fi
 # A stalled mirror must fail the step quickly rather than consume the job's
 # whole budget.
 apt=(sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=3)
+# The runner image carries third-party repositories the substrate never
+# draws on; a broken index there must not fail the refresh.
+sudo rm -f /etc/apt/sources.list.d/google-chrome.list \
+    /etc/apt/sources.list.d/google-chrome.sources \
+    /etc/apt/sources.list.d/microsoft-prod.list \
+    /etc/apt/sources.list.d/microsoft-prod.sources
 # A mirror mid-sync answers with mismatched indexes for a minute or two;
 # refresh again across that window before giving up.
 for attempt in 1 2 3 4 5; do
