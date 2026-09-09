@@ -37,6 +37,7 @@ pub fn execute(
         .ok_or_else(|| Error::Contract(format!("contract contains no proof `{proof_name}`")))?;
     if let Some(coordinate) = coordinate
         && !coordinate.inhabits_current_host()
+        && !(coordinate.cross_built() && env::consts::OS == "linux")
     {
         return Err(Error::Contract(format!(
             "coordinate `{coordinate}` cannot be proved by {}-{}",
