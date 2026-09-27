@@ -1,7 +1,6 @@
 # Eternalist Foundry
 
-Before meaningful Rust edits, read the canonical
-[Rust Style Doctrine](/home/main/programming/projects/rust_starter/docs/rust-style-doctrine.md).
+Before meaningful Rust edits, load `$style-doctrine`.
 
 Foundry owns portfolio CI scheduling, evidence accounting, artifact identity,
 and release publication. Applications own product behavior, fixtures, proof
