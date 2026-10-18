@@ -146,7 +146,7 @@ fn normalize(path: &Path) -> PathBuf {
             match component {
                 Component::CurDir => {}
                 Component::ParentDir => {
-                    let _ = path.pop();
+                    path.pop();
                 }
                 component => path.push(component.as_os_str()),
             }
