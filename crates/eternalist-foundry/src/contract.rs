@@ -67,7 +67,7 @@ impl Contract {
                     coordinates: Vec::new(),
                     setup: None,
                     packages: Vec::new(),
-                    timeout_minutes: 20,
+                    timeout_minutes: 45,
                 });
             }
         }
