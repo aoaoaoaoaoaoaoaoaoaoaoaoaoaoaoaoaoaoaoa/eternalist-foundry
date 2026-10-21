@@ -17,13 +17,33 @@ concurrency:
 
 jobs:
   foundry:
-    permissions:
-      contents: read
-    uses: ./.github/workflows/pipeline.yml
-
-  release:
-    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-    needs: foundry
+    name: Foundry
     permissions:
       contents: write
-    uses: ./.github/workflows/publish.yml
+    uses: ./.github/workflows/pipeline.yml
+
+  promote:
+    name: Promote fleet epoch
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: foundry
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: eternalist-foundry-promotion
+      cancel-in-progress: false
+    steps:
+      - name: Check out Foundry
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Advance fleet to this green commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git fetch --quiet origin refs/heads/fleet 2>/dev/null &&
+            git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD; then
+            printf 'fleet already contains %s\n' "$GITHUB_SHA"
+            exit 0
+          fi
+          git push origin "$GITHUB_SHA:refs/heads/fleet"

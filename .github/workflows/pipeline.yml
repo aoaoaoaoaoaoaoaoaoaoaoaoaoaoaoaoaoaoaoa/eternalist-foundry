@@ -8,11 +8,6 @@ on:
         required: false
         type: string
         default: foundry.toml
-      toolchain:
-        description: Repository-relative rust-toolchain file.
-        required: false
-        type: string
-        default: rust-toolchain.toml
       namespace:
         description: Collision-free evidence namespace for repositories with several products.
         required: false
@@ -38,9 +33,11 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Raise pinned Foundry
-        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@5e1a4c78fc8599882ff5525c9297c382729bec17
-      - name: Validate contract and forge matrix
+      - name: Raise Foundry
+        uses: $/.github/actions/bootstrap
+        with:
+          engine: ${{ job.workflow_sha }}
+      - name: Forge proof matrix
         id: plan
         shell: bash
         env:
@@ -49,7 +46,6 @@ jobs:
         run: |
           set -euo pipefail
           [[ $FOUNDRY_NAMESPACE =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]
-          foundry --contract "$FOUNDRY_CONTRACT" check
           foundry --contract "$FOUNDRY_CONTRACT" plan \
             --format human \
             --github-output "$GITHUB_OUTPUT"
@@ -70,13 +66,10 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Raise pinned Foundry
-        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@5e1a4c78fc8599882ff5525c9297c382729bec17
-      - name: Install declared Rust toolchain
-        shell: bash
-        env:
-          FOUNDRY_TOOLCHAIN: ${{ inputs.toolchain }}
-        run: foundry toolchain --file "$FOUNDRY_TOOLCHAIN"
+      - name: Raise Foundry
+        uses: $/.github/actions/bootstrap
+        with:
+          engine: ${{ job.workflow_sha }}
       - name: Install cross target
         if: ${{ matrix.cross }}
         shell: bash
@@ -122,11 +115,6 @@ jobs:
         uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
         with:
           tool: cargo-packager@0.11.8
-      - name: Install pinned CLI distributor
-        if: ${{ contains(matrix.laws, 'artifact') && (matrix.delivery == 'dist-shell' || matrix.delivery == 'dist-powershell') }}
-        uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
-        with:
-          tool: cargo-dist@0.32.0
       - name: Execute and seal proof
         shell: bash
         env:
@@ -164,31 +152,26 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Raise pinned Foundry
-        uses: aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/eternalist-foundry/.github/actions/bootstrap@5e1a4c78fc8599882ff5525c9297c382729bec17
-      - name: Install declared Rust toolchain
-        shell: bash
-        env:
-          FOUNDRY_TOOLCHAIN: ${{ inputs.toolchain }}
-        run: foundry toolchain --file "$FOUNDRY_TOOLCHAIN"
+      - name: Raise Foundry
+        uses: $/.github/actions/bootstrap
+        with:
+          engine: ${{ job.workflow_sha }}
       - name: Recover proof cells
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: foundry-${{ inputs.namespace }}-proof-*
           path: ${{ runner.temp }}/foundry-evidence
           merge-multiple: true
-      - name: Judge complete evidence graph
+      - name: Judge evidence into the support manifest
         shell: bash
         env:
           FOUNDRY_CONTRACT: ${{ inputs.contract }}
           FOUNDRY_EVIDENCE_ROOT: ${{ runner.temp }}/foundry-evidence
           FOUNDRY_SUPPORT: ${{ runner.temp }}/foundry-verdict/support.json
-        run: |
-          set -euo pipefail
-          foundry --contract "$FOUNDRY_CONTRACT" judge "$FOUNDRY_EVIDENCE_ROOT"
-          foundry --contract "$FOUNDRY_CONTRACT" support \
-            "$FOUNDRY_EVIDENCE_ROOT" \
-            "$FOUNDRY_SUPPORT"
+        run: >-
+          foundry --contract "$FOUNDRY_CONTRACT" support
+          "$FOUNDRY_EVIDENCE_ROOT"
+          "$FOUNDRY_SUPPORT"
       - name: Retain public support manifest
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -196,3 +179,98 @@ jobs:
           path: ${{ runner.temp }}/foundry-verdict/support.json
           if-no-files-found: error
           retention-days: 30
+
+  publish:
+    name: Publish judged release
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    needs: verdict
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Check out product
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Raise Foundry
+        uses: $/.github/actions/bootstrap
+        with:
+          engine: ${{ job.workflow_sha }}
+      - name: Recover proof cells
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: foundry-${{ inputs.namespace }}-proof-*
+          path: ${{ runner.temp }}/foundry-evidence
+          merge-multiple: true
+      - name: Stage judged assets
+        shell: bash
+        env:
+          FOUNDRY_CONTRACT: ${{ inputs.contract }}
+          FOUNDRY_NAMESPACE: ${{ inputs.namespace }}
+          FOUNDRY_EVIDENCE_ROOT: ${{ runner.temp }}/foundry-evidence
+          FOUNDRY_RELEASE_STAGE: ${{ runner.temp }}/foundry-release
+        run: |
+          set -euo pipefail
+          foundry --contract "$FOUNDRY_CONTRACT" stage \
+            "$FOUNDRY_EVIDENCE_ROOT" \
+            "$FOUNDRY_RELEASE_STAGE"
+          if [[ $FOUNDRY_NAMESPACE != product ]]; then
+            mv "$FOUNDRY_RELEASE_STAGE/support.json" \
+              "$FOUNDRY_RELEASE_STAGE/support-$FOUNDRY_NAMESPACE.json"
+          fi
+      - name: Require registry publication
+        shell: bash
+        env:
+          FOUNDRY_NAMESPACE: ${{ inputs.namespace }}
+          FOUNDRY_RELEASE_STAGE: ${{ runner.temp }}/foundry-release
+        run: |
+          set -euo pipefail
+          manifest=$FOUNDRY_RELEASE_STAGE/support.json
+          if [[ $FOUNDRY_NAMESPACE != product ]]; then
+            manifest=$FOUNDRY_RELEASE_STAGE/support-$FOUNDRY_NAMESPACE.json
+          fi
+          package=$(jq -r .product.package "$manifest")
+          version=$(jq -r .product.version "$manifest")
+          publish=$(cargo metadata --locked --no-deps --format-version 1 |
+            jq -c --arg package "$package" '.packages[] | select(.name == $package) | .publish')
+          if [[ $publish == '[]' ]]; then
+            printf '%s is not published to a registry\n' "$package"
+            exit 0
+          fi
+          # A publishable package reaches crates.io before a release claims it.
+          cd "$RUNNER_TEMP"
+          cargo info --registry crates-io "$package@$version" >/dev/null
+      - name: Publish immutable release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FOUNDRY_RELEASE_STAGE: ${{ runner.temp }}/foundry-release
+        run: |
+          set -euo pipefail
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            # Another namespace's publisher may create the release first.
+            gh release create "$GITHUB_REF_NAME" --verify-tag \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes ||
+              gh release view "$GITHUB_REF_NAME" >/dev/null
+          fi
+          release=$(mktemp)
+          witness=$(mktemp -d)
+          trap 'rm -f "$release"; rm -rf "$witness"' EXIT
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" >"$release"
+          for asset in "$FOUNDRY_RELEASE_STAGE"/*; do
+            name=${asset##*/}
+            url=$(jq -r --arg name "$name" \
+              '.assets[] | select(.name == $name) | .url' "$release")
+            if [[ -z "$url" ]]; then
+              gh release upload "$GITHUB_REF_NAME" "$asset"
+              continue
+            fi
+            existing="$witness/$name"
+            gh api -H 'Accept: application/octet-stream' "$url" >"$existing"
+            if ! cmp -s "$asset" "$existing"; then
+              printf 'release asset %q already exists with different bytes\n' "$name" >&2
+              exit 1
+            fi
+          done

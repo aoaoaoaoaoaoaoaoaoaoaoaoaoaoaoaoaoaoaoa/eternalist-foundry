@@ -336,10 +336,15 @@ fn proof_executable(command: &str, foundry_bash: Option<&OsStr>) -> OsString {
     if command == "bash"
         && let Some(foundry_bash) = foundry_bash
     {
-        foundry_bash.to_owned()
-    } else {
-        command.into()
+        return foundry_bash.to_owned();
     }
+    // A recipe runs the engine that planned it, never whichever `foundry` leads PATH.
+    if command == "foundry"
+        && let Ok(engine) = env::current_exe()
+    {
+        return engine.into_os_string();
+    }
+    command.into()
 }
 
 fn shellish(value: &str) -> String {

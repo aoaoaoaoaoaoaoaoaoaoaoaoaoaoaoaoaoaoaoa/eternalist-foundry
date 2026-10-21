@@ -3,7 +3,6 @@ schema = 1
 [product]
 name = "Fixture GUI"
 package = "fixture-gui"
-binary = "fixture-gui"
 identifier = "moe.eternalist.fixture-gui"
 profile = "native-gui"
 

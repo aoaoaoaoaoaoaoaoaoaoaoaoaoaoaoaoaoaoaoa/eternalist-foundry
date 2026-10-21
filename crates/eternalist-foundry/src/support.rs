@@ -82,6 +82,12 @@ impl Adjudication {
                     receipt.artifacts.len()
                 )));
             }
+            if receipt.laws.contains(&Law::Artifact) && receipt.artifacts.is_empty() {
+                return Err(Error::Contract(format!(
+                    "artifact receipt `{}` witnesses no artifact",
+                    node.id
+                )));
+            }
             receipts.push(receipt);
         }
         Ok(Self {
@@ -402,9 +408,11 @@ struct CargoPackage {
     name: String,
     version: String,
     repository: Option<String>,
+    /// `null` admits every registry; an empty list is `publish = false`.
+    publish: Option<Vec<String>>,
 }
 
-fn cargo_package(workspace: &Path, name: &str) -> Result<CargoPackage> {
+fn cargo_metadata(workspace: &Path) -> Result<CargoMetadata> {
     let output = Command::new("cargo")
         .args(["metadata", "--locked", "--no-deps", "--format-version", "1"])
         .current_dir(workspace)
@@ -419,8 +427,11 @@ fn cargo_package(workspace: &Path, name: &str) -> Result<CargoPackage> {
             String::from_utf8_lossy(&output.stderr).trim()
         )));
     }
-    let metadata = serde_json::from_slice::<CargoMetadata>(&output.stdout)?;
-    let mut packages = metadata
+    Ok(serde_json::from_slice::<CargoMetadata>(&output.stdout)?)
+}
+
+fn cargo_package(workspace: &Path, name: &str) -> Result<CargoPackage> {
+    let mut packages = cargo_metadata(workspace)?
         .packages
         .into_iter()
         .filter(|package| package.name == name);
@@ -433,6 +444,34 @@ fn cargo_package(workspace: &Path, name: &str) -> Result<CargoPackage> {
         )));
     }
     Ok(package)
+}
+
+/// Packages the product with every other publishable workspace member in one
+/// Cargo invocation, so their archives verify against each other.
+pub fn package(workspace: &Path, product: &str) -> Result<()> {
+    let mut command = Command::new("cargo");
+    command.args(["package", "--locked"]).current_dir(workspace);
+    for package in cargo_metadata(workspace)?.packages {
+        if package.name == product
+            || package
+                .publish
+                .is_none_or(|registries| !registries.is_empty())
+        {
+            command.args(["--package", package.name.as_str()]);
+        }
+    }
+    let status = command.status().map_err(|source| Error::Spawn {
+        command: "cargo package --locked".to_owned(),
+        source,
+    })?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(Error::CommandFailed {
+            command: "cargo package --locked".to_owned(),
+            status,
+        })
+    }
 }
 
 fn github_tag() -> Option<String> {

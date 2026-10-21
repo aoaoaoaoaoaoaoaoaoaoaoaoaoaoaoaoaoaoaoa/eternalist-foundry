@@ -3,7 +3,6 @@ schema = 1
 [product]
 name = "Eternalist Foundry"
 package = "eternalist-foundry"
-binary = "foundry"
 profile = "portable-cli"
 
 [coordinates]
@@ -20,21 +19,8 @@ run = ["./scripts/check"]
 timeout-minutes = 20
 
 [[proofs]]
-name = "security"
-laws = ["security"]
-run = ["./scripts/audit"]
-timeout-minutes = 15
-
-[[proofs]]
-name = "source-package"
-laws = ["source-package"]
-run = ["./scripts/package"]
-timeout-minutes = 20
-
-[[proofs]]
 name = "host"
 laws = ["host"]
-run = ["cargo", "test", "--locked", "--workspace", "--all-targets", "--all-features"]
 coordinates = [
   "linux-x86_64",
   "macos-aarch64",

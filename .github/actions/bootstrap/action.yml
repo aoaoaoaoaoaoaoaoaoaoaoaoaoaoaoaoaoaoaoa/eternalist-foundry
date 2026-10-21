@@ -1,21 +1,29 @@
 name: Bootstrap Eternalist Foundry
-description: Build the pinned Foundry engine and expose its CI substrate.
+description: Raise the fleet compiler and build the Foundry engine at the running workflow commit.
+
+inputs:
+  engine:
+    description: Commit of the running Foundry workflow; keys the engine cache.
+    required: true
 
 runs:
   using: composite
   steps:
-    - name: Restore pinned engine cache
+    - name: Raise fleet compiler
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/../../../scripts/ci/raise-compiler"
+    - name: Restore engine cache
       id: engine-cache
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ runner.temp }}/eternalist-foundry-target
-        key: eternalist-foundry-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.action_ref }}
-    - name: Build pinned engine
+        key: eternalist-foundry-v2-${{ runner.os }}-${{ runner.arch }}-${{ inputs.engine }}
+    - name: Build engine
       shell: bash
       run: bash "$GITHUB_ACTION_PATH/../../../scripts/ci/bootstrap-foundry"
-    - name: Save pinned engine cache
+    - name: Save engine cache
       if: ${{ steps.engine-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ runner.temp }}/eternalist-foundry-target
-        key: eternalist-foundry-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.action_ref }}
+        key: eternalist-foundry-v2-${{ runner.os }}-${{ runner.arch }}-${{ inputs.engine }}

@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+# The Foundry's rust-toolchain.toml names the fleet compiler. Install it and
+# make it the runner's default, so every product of one Foundry epoch builds
+# with the same compiler unless it declares its own toolchain file.
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
+cd "$root"
+rustup toolchain install
+toolchain=$(rustup show active-toolchain | cut -d ' ' -f 1)
+rustup default "$toolchain"

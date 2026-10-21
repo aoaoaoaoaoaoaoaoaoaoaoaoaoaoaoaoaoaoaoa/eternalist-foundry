@@ -1,0 +1,7 @@
+paths:
+  .github/workflows/pipeline.yml:
+    ignore:
+      # actionlint 1.7.12 predates GitHub's `$/` same-commit action reference
+      # and the job.workflow_* context properties that pipeline.yml relies on.
+      - 'specifying action "\$/\.github/actions/bootstrap" in invalid format'
+      - 'property "workflow_sha" is not defined in object type'

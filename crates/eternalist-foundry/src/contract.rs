@@ -35,13 +35,50 @@ pub struct Contract {
 impl Contract {
     pub fn load(path: &Path) -> Result<Self> {
         let source = fs::read_to_string(path).map_err(|source| io("read", path, source))?;
-        let contract = toml::from_str::<Self>(&source).map_err(|source| Error::Toml {
+        let contract = Self::from_toml(&source).map_err(|source| Error::Toml {
             path: path.to_path_buf(),
             source,
         })?;
         contract.validate()?;
         manifest::enforce(workspace_of(path))?;
         Ok(contract)
+    }
+
+    /// Parses a contract and supplies the commands it leaves to law recipes.
+    pub fn from_toml(source: &str) -> std::result::Result<Self, toml::de::Error> {
+        let mut contract = toml::from_str::<Self>(source)?;
+        contract.inherit_recipes();
+        Ok(contract)
+    }
+
+    /// A proof of one law with a recipe may omit `run`, and the security and
+    /// publishable-graph laws a profile requires need no declaration at all.
+    fn inherit_recipes(&mut self) {
+        let mut implied = vec![Law::Security];
+        if self.product.profile != Profile::PlatformBound {
+            implied.push(Law::SourcePackage);
+        }
+        for law in implied {
+            if !self.proofs.iter().any(|proof| proof.laws.contains(&law)) {
+                self.proofs.push(Proof {
+                    name: law.to_string(),
+                    laws: vec![law],
+                    run: Vec::new(),
+                    coordinates: Vec::new(),
+                    setup: None,
+                    packages: Vec::new(),
+                    timeout_minutes: 20,
+                });
+            }
+        }
+        for proof in &mut self.proofs {
+            if proof.run.is_empty()
+                && let [law] = proof.laws.as_slice()
+                && let Some(recipe) = law.recipe()
+            {
+                proof.run = recipe.iter().map(|&part| part.to_owned()).collect();
+            }
+        }
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -242,8 +279,6 @@ pub struct Product {
     pub name: String,
     pub package: String,
     #[serde(default)]
-    pub binary: Option<String>,
-    #[serde(default)]
     pub identifier: Option<String>,
     pub profile: Profile,
 }
@@ -255,10 +290,7 @@ impl Product {
                 format!("product.{field} is empty")
             })?;
         }
-        require(
-            self.profile == Profile::RustLibrary || self.binary.is_some(),
-            || format!("profile `{}` requires product.binary", self.profile),
-        )
+        Ok(())
     }
 }
 
@@ -534,8 +566,6 @@ pub enum Delivery {
     Cargo,
     Dmg,
     NsisCurrentUser,
-    DistShell,
-    DistPowershell,
     GithubArchive,
 }
 
@@ -544,8 +574,7 @@ impl Delivery {
         match self {
             Self::Cargo | Self::GithubArchive => true,
             Self::Dmg => matches!(platform, Platform::Macos),
-            Self::NsisCurrentUser | Self::DistPowershell => matches!(platform, Platform::Windows),
-            Self::DistShell => matches!(platform, Platform::Linux | Platform::Macos),
+            Self::NsisCurrentUser => matches!(platform, Platform::Windows),
         }
     }
 
@@ -560,8 +589,6 @@ impl fmt::Display for Delivery {
             Self::Cargo => "cargo",
             Self::Dmg => "dmg",
             Self::NsisCurrentUser => "nsis-current-user",
-            Self::DistShell => "dist-shell",
-            Self::DistPowershell => "dist-powershell",
             Self::GithubArchive => "github-archive",
         })
     }
@@ -592,8 +619,6 @@ impl TrustPolicy {
 pub enum Trust {
     NotApplicable,
     UnsignedIncubation,
-    Signed,
-    Notarized,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -601,6 +626,8 @@ pub enum Trust {
 pub struct Proof {
     pub name: String,
     pub laws: Vec<Law>,
+    /// Omitted when the proof's one law carries a Foundry recipe.
+    #[serde(default)]
     pub run: Vec<String>,
     #[serde(default)]
     pub coordinates: Vec<Coordinate>,
@@ -777,6 +804,28 @@ impl Law {
             Self::FirstPresent | Self::NativeAcceptance | Self::Lifecycle
         )
     }
+
+    /// The command a proof of this law alone runs when its contract names none.
+    const fn recipe(self) -> Option<&'static [&'static str]> {
+        match self {
+            Self::Security => Some(&["cargo", "audit", "--deny", "warnings"]),
+            Self::SourcePackage => Some(&["foundry", "package"]),
+            Self::Host => Some(&[
+                "cargo",
+                "test",
+                "--locked",
+                "--workspace",
+                "--all-targets",
+                "--all-features",
+            ]),
+            Self::Source
+            | Self::Demonstration
+            | Self::FirstPresent
+            | Self::NativeAcceptance
+            | Self::Lifecycle
+            | Self::Artifact => None,
+        }
+    }
 }
 
 impl fmt::Display for Law {
@@ -913,9 +962,8 @@ mod tests {
 
     #[test]
     fn one_universal_artifact_proof_covers_the_macos_delivery() {
-        let contract =
-            toml::from_str::<Contract>(include_str!("../../../tests/fixtures/native-gui.toml"))
-                .expect("parse native GUI fixture");
+        let contract = Contract::from_toml(include_str!("../../../tests/fixtures/native-gui.toml"))
+            .expect("parse native GUI fixture");
         contract.validate().expect("validate native GUI fixture");
         let artifact = contract
             .proof("artifact-macos")

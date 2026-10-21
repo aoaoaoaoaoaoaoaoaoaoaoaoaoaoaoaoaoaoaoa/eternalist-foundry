@@ -9,8 +9,7 @@ use crate::{
     contract::{Contract, Coordinate, workspace_of},
     error::Result,
     plan::Plan,
-    support::{Adjudication, support_path},
-    toolchain::ToolchainFile,
+    support::{Adjudication, package, support_path},
 };
 
 mod contract;
@@ -19,7 +18,6 @@ mod manifest;
 mod plan;
 mod proof;
 mod support;
-mod toolchain;
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -67,11 +65,8 @@ enum Directive {
         evidence_root: PathBuf,
         output: PathBuf,
     },
-    /// Install the repository's declared Rust toolchain through rustup.
-    Toolchain {
-        #[arg(long, default_value = "rust-toolchain.toml")]
-        file: PathBuf,
-    },
+    /// Package the product and every other publishable workspace member.
+    Package,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -163,7 +158,10 @@ fn execute(invocation: Invocation) -> Result<()> {
                 output.display()
             );
         }
-        Directive::Toolchain { file } => ToolchainFile::load(&file)?.install()?,
+        Directive::Package => {
+            let contract = Contract::load(&invocation.contract)?;
+            package(workspace, &contract.product.package)?;
+        }
     }
     Ok(())
 }

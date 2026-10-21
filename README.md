@@ -4,11 +4,12 @@ Foundry turns a product-owned evidence contract into native CI jobs, verifies
 that every planned proof returned a receipt, and emits the exact support
 manifest from which Eternalist's public platform claims are derived.
 
-It does not own application tests or package construction. Applications expose
-independently runnable proof commands. [`dist`](https://github.com/axodotdev/cargo-dist)
-builds CLI distributions; Cargo Packager builds native GUI containers. Foundry
-schedules those engines, records their products, and refuses publication when
-the declared support envelope and the surviving evidence differ.
+It does not own application tests or native package construction. Applications
+expose independently runnable proof commands; the laws every Rust product shares
+carry Foundry recipes a contract simply inherits. Cargo Packager builds native
+GUI containers. Foundry schedules those engines, records their products, and
+refuses publication when the declared support envelope and the surviving
+evidence differ.
 
 The initial profiles are native GUI, portable CLI, Rust library, and explicitly
 platform-bound Rust products. Baseline coordinates are closed values rather
@@ -18,6 +19,7 @@ than arbitrary runner labels.
 foundry check
 foundry plan
 foundry prove source
+foundry package
 foundry judge evidence/
 foundry support evidence/ support.json
 foundry stage evidence/ release/
@@ -34,11 +36,11 @@ must not know application lifecycle types, GUI frameworks, product domains, or
 the implementation behind a proof command.
 
 The integration protocol is deliberately impoverished: a product contract
-supplies an argument vector; Foundry observes its exit status and artifact
-bytes. Eternalist Apps, egui-tester, and products neither link Foundry nor emit
-its receipt types. Foundry does not link them. Application and test-support
-versions therefore evolve independently from the evidence schema and release
-engine.
+supplies an argument vector or inherits its law's recipe; Foundry observes the
+exit status and artifact bytes. Eternalist Apps, egui-tester, and products
+neither link Foundry nor emit its receipt types. Foundry does not link them.
+Application and test-support versions therefore evolve independently from the
+evidence schema and release engine.
 
 `scripts/check-cells` enforces the compile-time boundary. Reusable product
 behavior belongs in Eternalist Apps; native GUI observation belongs in
@@ -47,30 +49,46 @@ contract.
 
 ## Adoption
 
-Each product keeps three small pieces of policy: `foundry.toml`, an exact
-`rust-toolchain.toml`, and the product-owned commands named by its proofs. Its
-workflow is the pinned caller in [`templates/ci.yml`](templates/ci.yml).
-Ordinary proof calls are read-only. A separate tag-gated publication call
-receives write authority only after the complete proof call succeeds.
+A product keeps `foundry.toml` and the commands its own proofs name. Its
+workflow is [`templates/ci.yml`](templates/ci.yml), which calls `pipeline.yml`
+at `fleet`, so every product runs the same Foundry epoch and no consumer carries
+a Foundry commit. This repository's CI advances `fleet` only to a `main` commit
+whose own native matrix and verdict are green. A frozen product names an exact
+commit instead, visibly.
 
-The workflow pin advances only to a Foundry commit whose own native matrix and
-verdict are green. Consumer repositories therefore inherit one immutable
-scheduler, action set, tool versions, Linux display substrate, receipt schema,
-and publication gate without copying their implementation. `actionlint` runs
-inside every source cell, so drift in a consumer workflow fails before product
-proof begins.
+An epoch carries the scheduler, action set, tool versions, Linux display
+substrate, receipt schema, publication gate, and the fleet compiler named by
+this repository's `rust-toolchain.toml`. The bootstrap makes that compiler the
+runner default, so a product without its own toolchain file builds with it;
+workstations follow it through their rustup default. Every job builds the engine
+from the running workflow commit (`$/.github/actions/bootstrap`), so engine and
+workflow cannot disagree. `actionlint` runs inside every source cell, so drift
+in a consumer workflow fails before product proof begins.
+
+Proof jobs are read-only. On a `v*` tag, the publisher, the only job with write
+authority, requires the product's publishable package version on crates.io,
+then attaches `support.json` and the judged artifacts to the release, refusing
+to replace existing bytes.
+
+A proof of one law with a recipe may omit `run`, and the security and
+publishable-graph laws need no declaration at all. Security runs
+`cargo audit --deny warnings`, with exceptions in the product's
+`.cargo/audit.toml`; the publishable graph runs `foundry package`, one
+`cargo package --locked` over the product and every publishable workspace
+member; a host proof runs
+`cargo test --locked --workspace --all-targets --all-features`.
 
 A repository containing several independently claimed products may call the
 workflow once per contract and assign each call a distinct lowercase
-`namespace`. Proof cells and support manifests remain disjoint within the one
-Actions run.
+`namespace`. Proof cells remain disjoint within the one Actions run, and each
+namespace publishes `support-<namespace>.json`.
 
 ## Acceleration And Observation
 
 The pipeline restores Rust dependency and target caches for every proof except
 the independent security cell. Only trusted pushes to `main` may save product
 caches; pull requests and tags are restore-only. The bootstrap action separately
-caches the release-built Foundry engine by exact action pin, host operating
+caches the release-built Foundry engine by workflow commit, host operating
 system, and architecture. A missing or evicted cache merely makes a proof cold:
 caches never satisfy a law, enter a receipt, or alter a verdict.
 
@@ -132,12 +150,11 @@ native profile.
 
 Each proof seals its exact command, source commit, native host, elapsed time,
 run URL, and SHA-256 artifact inventory into a receipt. `judge` demands the
-complete planned receipt graph and rejects stale commands, foreign hosts,
-failed proofs, alien evidence cells, and altered artifacts. `stage` then emits
-`support.json` and a flat, collision-free release directory containing only
-judged artifacts.
+complete planned receipt graph and rejects stale commands, foreign hosts, failed
+proofs, alien evidence cells, artifact proofs that witnessed nothing, and
+altered artifacts. `stage` then emits `support.json` and a flat, collision-free
+release directory containing only judged artifacts.
 
-Linux distribution is Cargo-first. Native GUI containers are unsigned DMGs and
-current-user NSIS installers during incubation. Portable CLIs delegate archive
-and installer construction to `dist`; Foundry schedules and judges that engine
-instead of reimplementing it.
+Linux distribution is Cargo-first; a platform-bound product may publish a
+GitHub archive instead. Native GUI containers are unsigned DMGs and current-user
+NSIS installers during incubation.

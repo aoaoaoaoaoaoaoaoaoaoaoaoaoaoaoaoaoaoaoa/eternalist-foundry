@@ -25,6 +25,8 @@ pub enum Error {
     Manifest(String),
     #[error("proof `{proof}` failed with {status}")]
     ProofFailed { proof: String, status: ExitStatus },
+    #[error("`{command}` failed with {status}")]
+    CommandFailed { command: String, status: ExitStatus },
     #[error("cannot execute `{command}`: {source}")]
     Spawn { command: String, source: io::Error },
     #[error("command `{command}` returned no standard output")]

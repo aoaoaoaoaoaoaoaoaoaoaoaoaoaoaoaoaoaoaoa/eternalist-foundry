@@ -19,19 +19,8 @@ laws = ["source"]
 run = ["cargo", "test"]
 
 [[proofs]]
-name = "security"
-laws = ["security"]
-run = ["cargo", "audit"]
-
-[[proofs]]
-name = "source-package"
-laws = ["source-package"]
-run = ["cargo", "package"]
-
-[[proofs]]
 name = "host"
 laws = ["host"]
-run = ["cargo", "test"]
 coordinates = [
   "linux-x86_64",
   "macos-aarch64",

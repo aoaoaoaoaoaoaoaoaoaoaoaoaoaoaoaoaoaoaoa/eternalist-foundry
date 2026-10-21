@@ -121,21 +121,32 @@ mod tests {
     use crate::contract::Contract;
 
     #[test]
-    fn one_proof_expands_across_its_coordinates() {
-        let contract =
-            toml::from_str::<Contract>(include_str!("../../../tests/fixtures/library.toml"))
-                .expect("parse fixture");
+    fn omitted_proofs_inherit_recipes_and_expand() {
+        let contract = Contract::from_toml(include_str!("../../../tests/fixtures/library.toml"))
+            .expect("parse fixture");
         contract.validate().expect("validate fixture");
         let plan = Plan::forge(&contract).expect("forge plan");
         assert!(plan.node("host--windows-x86_64").is_some());
         assert_eq!(plan.nodes.len(), 7);
+        let command = |proof: &str| contract.proof(proof).map(|proof| proof.run.join(" "));
+        assert_eq!(
+            command("security").as_deref(),
+            Some("cargo audit --deny warnings")
+        );
+        assert_eq!(
+            command("source-package").as_deref(),
+            Some("foundry package")
+        );
+        assert_eq!(
+            command("host").as_deref(),
+            Some("cargo test --locked --workspace --all-targets --all-features")
+        );
     }
 
     #[test]
     fn matrix_carries_closed_delivery_and_host_coordinates() {
-        let contract =
-            toml::from_str::<Contract>(include_str!("../../../tests/fixtures/native-gui.toml"))
-                .expect("parse native GUI fixture");
+        let contract = Contract::from_toml(include_str!("../../../tests/fixtures/native-gui.toml"))
+            .expect("parse native GUI fixture");
         contract.validate().expect("validate native GUI fixture");
         let plan = Plan::forge(&contract).expect("forge native GUI plan");
         let macos = plan
